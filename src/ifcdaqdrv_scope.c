@@ -6,13 +6,8 @@
 #include <assert.h>
 #include <string.h>
 
-#ifdef TOSCA_USRLIB
-// #include <pevioctl.h>
-// #include <pevxulib.h>
-// #include <pevulib.h>
-#include <tscioctl.h>
-#include <tsculib.h>
-#endif
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include <epicsThread.h>
 #include <epicsTime.h>

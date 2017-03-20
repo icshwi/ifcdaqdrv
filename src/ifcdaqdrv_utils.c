@@ -7,13 +7,8 @@
 #include <signal.h>
 #include <inttypes.h>
 
-#ifdef TOSCA_USRLIB
-// #include <pevioctl.h>
-// #include <pevxulib.h>
-// #include <pevulib.h>
-#include <tscioctl.h>
-#include <tsculib.h>
-#endif
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
@@ -24,6 +19,7 @@
 #include "ifcdaqdrv_scope.h"
 
 ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val){
+    int ret;
 #if DEBUG
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
         // error message
@@ -34,14 +30,10 @@ ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int 
     }
 #endif
 
-#ifdef TOSCA_USRLIB
     // *i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    *i32_reg_val = tsc_csr_rd(TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-#else
-    *i32_reg_val = 0;
-#endif
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
 
-    return 0;
+    return ret;
 }
 
 ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value){
@@ -60,10 +52,8 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (write)\n",       ifcdevice->card, offset, register_idx, value));
 #endif
 
-#ifdef TOSCA_USRLIB
     // pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), value);
-    tsc_csr_wr(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), value);
-#endif
+    tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
 
 #if DEBUG
     ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
@@ -75,6 +65,7 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
 ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t
                                  clrmask){
     int32_t i32_reg_val;
+    int ret;
 #if DEBUG
     if ((register_idx < 0) || (register_idx >= 1024)) {
         // error message
@@ -84,12 +75,8 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     }
 #endif
 
-#ifdef TOSCA_USRLIB
     //i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    i32_reg_val = tsc_csr_rd(TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-#else
-    i32_reg_val = 0;
-#endif
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
 
 #if DEBUG
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (befor setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
@@ -99,10 +86,8 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     i32_reg_val &= ~clrmask;
     i32_reg_val |= setmask;
 
-#ifdef TOSCA_USRLIB
     //pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
-    tsc_csr_wr(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
-#endif
+    tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
 
 #if DEBUG
     ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
@@ -179,19 +164,15 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
     }
 
     if(ifcdevice->smem_dma_buf) {
-#ifdef TOSCA_USRLIB
         //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
         tsc_kbuf_free(ifcdevice->smem_dma_buf);
-#endif
         free(ifcdevice->smem_dma_buf);
         ifcdevice->smem_dma_buf = NULL;
     }
 
     if(ifcdevice->sram_dma_buf){
-#ifdef TOSCA_USRLIB
         // pevx_buf_free(ifcdevice->card, ifcdevice->sram_dma_buf);
         tsc_kbuf_free(ifcdevice->sram_dma_buf);
-#endif
         free(ifcdevice->sram_dma_buf);
         ifcdevice->sram_dma_buf = NULL;
     }
@@ -221,16 +202,10 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     LOG((5, "Trying to allocate %dkiB in kernel\n", ifcdevice->sram_size / 1024));
 
-#ifdef TOSCA_USRLIB
-    // if (pevx_buf_alloc(ifcdevice->card, ifcdevice->sram_dma_buf) == NULL) {
-    //     goto err_sram_buf;
-    // }
-
     if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) == NULL) {
         goto err_sram_buf;
     }
 
-#endif
 
     //ifcdevice->smem_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -243,12 +218,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     do {
         LOG((5, "Trying to allocate %dMiB in kernel\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
 
-#ifdef TOSCA_USRLIB
-        //p = pevx_buf_alloc(ifcdevice->card, ifcdevice->smem_dma_buf);
         p = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
-#else
-        p = NULL;
-#endif
 
 
     } while (p == NULL && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
@@ -266,20 +236,16 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     return status_success;
 
 err_smem_user_buf:
-#ifdef TOSCA_USRLIB
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->smem_dma_buf);
-#endif
  
 
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
-#ifdef TOSCA_USRLIB
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->sram_dma_buf);
-#endif
 
 err_sram_buf:
     free(ifcdevice->sram_dma_buf);
@@ -324,12 +290,8 @@ ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, ui
     // dma_req.wait_mode = DMA_WAIT_1S | (5<<4);
     // dma_req.dma_status = 0;
 
-#ifdef TOSCA_USRLIB
     // status = pevx_dma_move(ifcdevice->card, &dma_req);
     status = tsc_dma_move(&dma_req);
-#else
-    status = status_success;
-#endif
 
     if (status != 0) {
 #if DEBUG
@@ -386,6 +348,16 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
         return status_internal;
     }
 
+    /* workaround */
+#ifndef DMA_SPACE_USR1
+    #define DMA_SPACE_USR1 DMA_SPACE_USR
+#endif
+
+#ifndef DMA_SPACE_USR2
+    #define DMA_SPACE_USR2 DMA_SPACE_USR
+#endif
+
+
     status = ifcdaqdrv_dma_read_unlocked(
             ifcdevice,
             offset, ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, DMA_PCIE_RR2,
@@ -401,31 +373,23 @@ static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
 }
 
 void ifc_stop_timer(struct ifcdaqdrv_dev *ifcdevice) {
-#ifdef TOSCA_USRLIB
     //pevx_timer_stop(ifcdevice->card);
     tsc_timer_stop();
-#endif
 }
 
 void ifc_init_timer(struct ifcdaqdrv_dev *ifcdevice){
-#ifdef TOSCA_USRLIB
     // pevx_timer_start(ifcdevice->card, TIMER_1MHZ ,0);
     tsc_timer_start(TIMER_1MHZ, 0);
-#endif
 }
 
 uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
 
-#ifdef TOSCA_USRLIB
     // struct pevx_time tim;  
     // pevx_timer_read(ifcdevice->card, &tim);
     struct tsc_time tim;
     tsc_timer_read(ifcdevice->card, &tim);
 
     return ((uint64_t)tim.time * 1000) + (uint64_t)(tim.utime & 0x1ffff) / 100;
-#else
-    return 0;
-#endif
     
 }
 

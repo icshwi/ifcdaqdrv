@@ -7,22 +7,16 @@
 #include <sys/ioctl.h>
 #include <pthread.h>
 
-#ifdef TOSCA_USRLIB
-// #include <pevioctl.h>
-// #include <pevxulib.h>
-#include <tscioctl.h>
-#include <tsculib.h>
-#endif
+/* TOSCA API */
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_scope.h"
 #include "ifcdaqdrv_fmc.h"
-// #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
-// #include "ifcfastintdrv.h"
-// #include "ifcfastintdrv_utils.h"
 
 LIST_HEAD(ifcdaqdrv_devlist);
 pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -67,20 +61,11 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Initialize pevx library */
 
-#ifdef TOSCA_USRLIB
-    // node = pevx_init(ifcuser->card);
-    // if (!node) {
-    //     status = status_no_device;
-    //     goto err_pevx_init;
-    // }
-
     node = tsc_init();
     if (node < 0) {
         status = status_no_device;
         goto err_pevx_init;
     }
-
-#endif
 
     /* Allocate private structure */
     ifcdevice = calloc(1, sizeof(struct ifcdaqdrv_dev));
@@ -212,10 +197,7 @@ err_read:
 
 err_dev_alloc:
     /* Close pevx library */
-#ifdef TOSCA_USRLIB
-    // pevx_exit(ifcdevice->card);
     tsc_exit();
-#endif  
 
 err_pevx_init:
     /* Unlock device list */
@@ -241,10 +223,7 @@ ifcdaqdrv_status ifcdaqdrv_close_device(struct ifcdaqdrv_usr *ifcuser) {
     if (--ifcdevice->count == 0) {
         list_del(&ifcdevice->list);
         ifcdaqdrv_free(ifcdevice);
-#ifdef TOSCA_USRLIB
-        // pevx_exit(ifcdevice->card);
         tsc_exit();
-#endif
         free(ifcdevice);
     }
     pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);

@@ -8,7 +8,7 @@
 #define MAX_PEV_CARDS 16
 #define MAX_DECIMATIONS 20
 
-#define TCSR_ACCESS_ADJUST 0x80000000
+#define TCSR_ACCESS_ADJUST 0x00000000
 #define OFFSET_XUSER_CSR 0x1000
 
 #define min(a, b) \
@@ -59,94 +59,94 @@ typedef enum {
 } ifcdaqdrv_led;
 
 /* Definition of TOSCA structures when we don't have the driver  */
-#ifndef TOSCA_USRLIB
+// #ifndef TOSCA_USRLIB
 
-typedef long dma_addr_t;
+// typedef long dma_addr_t;
 
-struct tsc_ioctl_kbuf_req
-{
-  uint size;
-  void *k_base;
-  dma_addr_t b_base;
-  void *u_base;
-};
+// struct tsc_ioctl_kbuf_req
+// {
+//   uint size;
+//   void *k_base;
+//   dma_addr_t b_base;
+//   void *u_base;
+// };
 
-struct tsc_ioctl_dma_req
-{
-  dma_addr_t src_addr;
-  dma_addr_t des_addr;
-  uint size;
-  unsigned char src_space; unsigned char src_mode; unsigned char des_space; unsigned char des_mode;
-  unsigned char start_mode; unsigned char end_mode; unsigned char intr_mode; unsigned char wait_mode;
-  uint dma_status;
-};
+// struct tsc_ioctl_dma_req
+// {
+//   dma_addr_t src_addr;
+//   dma_addr_t des_addr;
+//   uint size;
+//   unsigned char src_space; unsigned char src_mode; unsigned char des_space; unsigned char des_mode;
+//   unsigned char start_mode; unsigned char end_mode; unsigned char intr_mode; unsigned char wait_mode;
+//   uint dma_status;
+// };
 
 
-#define DMA_SPACE_PCIE       0x00
-#define DMA_SPACE_SHM        0x02
-#define DMA_SPACE_USR        0x03
-#define DMA_SPACE_KBUF       0x08
-#define DMA_SPACE_MASK       0x07
+// #define DMA_SPACE_PCIE       0x00
+// #define DMA_SPACE_SHM        0x02
+// #define DMA_SPACE_USR        0x03
+// #define DMA_SPACE_KBUF       0x08
+// #define DMA_SPACE_MASK       0x07
 
-#define DMA_START_PIPE_NO    0x00
-#define DMA_START_PIPE       0x01
-#define DMA_START_CHAN(chan)  ((chan&1) << 4)
-#define DMA_SPACE_WS      0x10
-#define DMA_SPACE_DS      0x20
-#define DMA_SPACE_QS      0x30
+// #define DMA_START_PIPE_NO    0x00
+// #define DMA_START_PIPE       0x01
+// #define DMA_START_CHAN(chan)  ((chan&1) << 4)
+// #define DMA_SPACE_WS      0x10
+// #define DMA_SPACE_DS      0x20
+// #define DMA_SPACE_QS      0x30
 
-#define DMA_INTR_ENA      0x01
+// #define DMA_INTR_ENA      0x01
 
-#define DMA_WAIT_INTR     0x01
-#define DMA_WAIT_1MS      0x02
-#define DMA_WAIT_10MS     0x04
-#define DMA_WAIT_100MS    0x06
-#define DMA_WAIT_1S       0x08
-#define DMA_WAIT_10S      0x0a
-#define DMA_WAIT_100S     0x0c
+// #define DMA_WAIT_INTR     0x01
+// #define DMA_WAIT_1MS      0x02
+// #define DMA_WAIT_10MS     0x04
+// #define DMA_WAIT_100MS    0x06
+// #define DMA_WAIT_1S       0x08
+// #define DMA_WAIT_10S      0x0a
+// #define DMA_WAIT_100S     0x0c
 
-#define DMA_PCIE_TC0      0x00  /* Traffic Class 0 */
-#define DMA_PCIE_TC1      0x01  /* Traffic Class 1 */
-#define DMA_PCIE_TC2      0x02  /* Traffic Class 2 */
-#define DMA_PCIE_TC3      0x03  /* Traffic Class 3 */
-#define DMA_PCIE_TC4      0x04  /* Traffic Class 4 */
-#define DMA_PCIE_TC5      0x05  /* Traffic Class 5 */
-#define DMA_PCIE_TC6      0x06  /* Traffic Class 6 */
-#define DMA_PCIE_TC7      0x07  /* Traffic Class 7 */
-#define DMA_PCIE_RR1      0x00  /* 1 outstanding read request */
-#define DMA_PCIE_RR2      0x10  /* 2 outstanding read request */
-#define DMA_PCIE_RR3      0x20  /* 3 outstanding read request */
+// #define DMA_PCIE_TC0      0x00  /* Traffic Class 0 */
+// #define DMA_PCIE_TC1      0x01  /* Traffic Class 1 */
+// #define DMA_PCIE_TC2      0x02  /* Traffic Class 2 */
+// #define DMA_PCIE_TC3      0x03  /* Traffic Class 3 */
+// #define DMA_PCIE_TC4      0x04   Traffic Class 4 
+// #define DMA_PCIE_TC5      0x05  /* Traffic Class 5 */
+// #define DMA_PCIE_TC6      0x06  /* Traffic Class 6 */
+// #define DMA_PCIE_TC7      0x07  /* Traffic Class 7 */
+// #define DMA_PCIE_RR1      0x00  /* 1 outstanding read request */
+// #define DMA_PCIE_RR2      0x10  /* 2 outstanding read request */
+// #define DMA_PCIE_RR3      0x20  /* 3 outstanding read request */
 
-#define DMA_SIZE_PKT_128  0x00000000 
-#define DMA_SIZE_PKT_256  0x40000000 
-#define DMA_SIZE_PKT_512  0x80000000 
-#define DMA_SIZE_PKT_1K   0xc0000000 
+// #define DMA_SIZE_PKT_128  0x00000000 
+// #define DMA_SIZE_PKT_256  0x40000000 
+// #define DMA_SIZE_PKT_512  0x80000000 
+// #define DMA_SIZE_PKT_1K   0xc0000000 
 
-#define DMA_STATE_IDLE          0x00
-#define DMA_STATE_ALLOCATED     0x01
-#define DMA_STATE_STARTED       0x02
-#define DMA_STATE_WAITING       0x03
-#define DMA_STATE_DONE          0x04
+// #define DMA_STATE_IDLE          0x00
+// #define DMA_STATE_ALLOCATED     0x01
+// #define DMA_STATE_STARTED       0x02
+// #define DMA_STATE_WAITING       0x03
+// #define DMA_STATE_DONE          0x04
 
-#define DMA_STATUS_RUN_RD0             0x01
-#define DMA_STATUS_RUN_RD1             0x02
-#define DMA_STATUS_RUN_WR0             0x04
-#define DMA_STATUS_RUN_WR1             0x08
-#define DMA_STATUS_DONE                0x10
-#define DMA_STATUS_WAITING             0x000
-#define DMA_STATUS_ENDED               0x100
-#define DMA_STATUS_TMO                 0x80
-#define DMA_STATUS_ERR                 0x40
-#define DMA_STATUS_BUSY                0x20
+// #define DMA_STATUS_RUN_RD0             0x01
+// #define DMA_STATUS_RUN_RD1             0x02
+// #define DMA_STATUS_RUN_WR0             0x04
+// #define DMA_STATUS_RUN_WR1             0x08
+// #define DMA_STATUS_DONE                0x10
+// #define DMA_STATUS_WAITING             0x000
+// #define DMA_STATUS_ENDED               0x100
+// #define DMA_STATUS_TMO                 0x80
+// #define DMA_STATUS_ERR                 0x40
+// #define DMA_STATUS_BUSY                0x20
 
-/* definitions created to enable compilation
- * THESE ARE NOT ON TSCIOCTL.H !!!
- */
-#define DMA_SPACE_USR1        0x04
-#define DMA_SPACE_USR2        0x05
-#define DMA_MODE_PIPE         0x01
+// /* definitions created to enable compilation
+//  * THESE ARE NOT ON TSCIOCTL.H !!!
+//  */
+// #define DMA_SPACE_USR1        0x04
+// #define DMA_SPACE_USR2        0x05
+// #define DMA_MODE_PIPE         0x01
 
-#endif
+// #endif
 
 
 /**

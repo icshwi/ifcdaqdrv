@@ -7,12 +7,8 @@
 #include <sys/ioctl.h>
 #include <pthread.h>
 
-#ifdef TOSCA_USRLIB
-// #include <pevioctl.h>
-// #include <pevxulib.h>
-#include <tscioctl.h>
-#include <tsculib.h>
-#endif
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
@@ -514,23 +510,14 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
 
     device |= ifcdevice->fmc == 1 ? IFC_FMC1_I2C_BASE : IFC_FMC2_I2C_BASE;
 
-#ifdef TOSCA_USRLIB
-    //status  = pevx_i2c_read(ifcdevice->card, device, reg, ui32_reg_val);
 
     /*TODO: check usage of i2c_read. Who is the first argument ? */
+    status  = tsc_i2c_read(device, reg, ui32_reg_val);
 
-    status  = tsc_i2c_read(ifcdevice->card, device, reg, ui32_reg_val);
-
-
-    /* TODO fix bit mask */
-    if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {
-        return status_i2c_nack;
-    }
-
-#else
-    status = 0;
-#endif
-
+    // /* TODO fix bit mask */
+    // if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {
+    //     return status_i2c_nack;
+    // }
 
     return status_success;
 }
