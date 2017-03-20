@@ -23,23 +23,24 @@
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
     char *p;
+#ifdef ENABLE_I2C
     p = ifcdevice->fru_id->product_name;
     if (p) {
-        // if (strcmp(p, "ACQ420FMC") == 0) {
-        //     LOG((5, "Identified ACQ420FMC\n"));
-        //     acq420_register(ifcdevice);
-        // } else if (strcmp(p, "ADC3110") == 0) {
-        //     LOG((5, "Identified ADC3110\n"));
-        //     adc3110_register(ifcdevice);
-        // } else if (strcmp(p, "ADC3111") == 0) {
-        //     LOG((5, "Identified ADC3111\n"));
-        //     adc3111_register(ifcdevice);
-        // } else if (strcmp(p, "ADC3112") == 0) {
-        //     LOG((5, "No support for ADC3112 yet\n"));
-        // } else {
-        //     LOG((5, "No recognized device %s\n", p));
-        //     return status_incompatible;
-        // }
+        if (strcmp(p, "ACQ420FMC") == 0) {
+            LOG((5, "Identified ACQ420FMC\n"));
+            acq420_register(ifcdevice);
+        } else if (strcmp(p, "ADC3110") == 0) {
+            LOG((5, "Identified ADC3110\n"));
+            adc3110_register(ifcdevice);
+        } else if (strcmp(p, "ADC3111") == 0) {
+            LOG((5, "Identified ADC3111\n"));
+            adc3111_register(ifcdevice);
+        } else if (strcmp(p, "ADC3112") == 0) {
+            LOG((5, "No support for ADC3112 yet\n"));
+        } else {
+            LOG((5, "No recognized device %s\n", p));
+            return status_incompatible;
+        }
 
         if (strcmp(p, "ADC3110") == 0) {
             LOG((5, "Identified ADC3110\n"));
@@ -50,6 +51,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         LOG((4, "Internal error, no product_name\n"));
         return status_internal;
     }
+#else
+    adc3110_register(ifcdevice);
+#endif
+
     return status_success;
 }
 

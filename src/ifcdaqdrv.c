@@ -89,6 +89,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         status = status_internal;
         goto err_read;
     }
+    
     if (i32_reg_val != IFC1210SCOPEDRV_TOSCA_SIGNATURE) {
         // Bug in current firmware, TOSCA signature is not at address 0.
         // printf("reg: %x, sig: %x\n", i32_reg_val, IFC1210SCOPEDRV_TOSCA_SIGNATURE);
@@ -134,6 +135,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     printf("FMC FDK signature: %08x\n", i32_reg_val);
 #endif
 
+
+/********************************** Skip reading FRU information *******************************/
     /* Determine what type of FMC that is mounted. */
     ifcdevice->fru_id = calloc(1, sizeof(struct fmc_fru_id));
     if (!ifcdevice->fru_id) {
@@ -142,6 +145,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* ifc_fmc_eeprom_read_fru will allocate two char arrays that have to be freed by us. */
+#ifdef ENABLE_I2C
     status = ifc_fmc_eeprom_read_fru(ifcdevice, ifcdevice->fru_id);
     if (status == status_fru_info_invalid) {
         /* .... fall back to IOxOS proprietary signature */
@@ -154,7 +158,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         status = status_internal;
         goto err_read;
     }
-
+#endif
+    
     /*
      * Register the correct functions with the ifcdevice and
      * allocate all memory necessary for DMA transfers

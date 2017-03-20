@@ -36,12 +36,16 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
         device |= IFC_FMC2_I2C_BASE;
         break;
     }
-    
+
+#ifdef ENABLE_I2C    
     /* TODO: this might be incompatible */
     status = tsc_i2c_read(device, tsc_swap_16(address), &reg_val);
     if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
         return status_i2c_nack;
     }
+#else
+    reg_val = 0;
+#endif
 
     *data = (uint8_t)reg_val;
     return status_success;
