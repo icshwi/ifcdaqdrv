@@ -1,29 +1,9 @@
-# README #
+## ifcdaqdrv2
 
-This README would normally document whatever steps are necessary to get your application up and running.
+This library exposes an interface to IOXOS mTCA DAQ boards to be used by EPICS devices support.
 
-### What is this repository for? ###
+# General information
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+Initial development is based on ifcdaqdrv library, developed for IFC1210 VME board.
 
-### How do I get set up? ###
-
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+Current version doesn't rely on hardware, it just simulate runtime registers and data.
