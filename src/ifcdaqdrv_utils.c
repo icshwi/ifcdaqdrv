@@ -263,7 +263,7 @@ err_sram_ctl:
  * @param offset Byte addressed offset
  * @param size Size in bytes
  */
-ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, uint32_t src_addr, uint8_t src_space, uint8_t src_mode, uint32_t des_addr, uint8_t des_space, uint8_t des_mode, uint32_t size) {
+ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dma_addr_t src_addr, uint8_t src_space, uint8_t src_mode, dma_addr_t des_addr, uint8_t des_space, uint8_t des_mode, uint32_t size) {
     //struct pev_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_dma_req dma_req = {0};
 
@@ -359,10 +359,13 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 #endif
 
 
+    // dma_buf->u_base is already dma_addr_t, no need to cast to ulong
+    // "offset" will be casted 
+
     status = ifcdaqdrv_dma_read_unlocked(
             ifcdevice,
-            offset, ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, DMA_PCIE_RR2,
-            (ulong)dma_buf->u_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
+            (dma_addr_t) offset, ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, DMA_PCIE_RR2,
+            dma_buf->u_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
             size | DMA_SIZE_PKT_1K);
 
     return status;
@@ -429,10 +432,13 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
             current_size = size;
         }
 
+        // dma_buf is already dma_addr_t
+        // src_addr sholud be casted
+
         status = ifcdaqdrv_dma_read_unlocked(
                 ifcdevice,
-                src_addr, DMA_SPACE_SHM, DMA_PCIE_RR2,
-                (ulong)dma_buf->b_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
+                (dma_addr_t) src_addr, DMA_SPACE_SHM, DMA_PCIE_RR2,
+                dma_buf->b_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
                 current_size | DMA_SIZE_PKT_1K);
 
         if (status != 0) {
