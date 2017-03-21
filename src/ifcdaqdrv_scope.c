@@ -20,6 +20,7 @@
 // #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
 // #include "ifcdaqdrv_adc3112.h"
+//typedef long dma_addr_t;
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
     char *p;

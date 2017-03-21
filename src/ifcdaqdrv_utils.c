@@ -6,6 +6,7 @@
 #include <string.h>
 #include <signal.h>
 #include <inttypes.h>
+typedef long dma_addr_t;
 
 #include "tscioctl.h"
 #include "tsculib.h"
@@ -263,12 +264,26 @@ err_sram_ctl:
  * @param offset Byte addressed offset
  * @param size Size in bytes
  */
-ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dma_addr_t src_addr, uint8_t src_space, uint8_t src_mode, dma_addr_t des_addr, uint8_t des_space, uint8_t des_mode, uint32_t size) {
+ifcdaqdrv_status 
+ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
+			    , dma_addr_t src_addr
+			    , uint8_t src_space
+			    , uint8_t src_mode
+			    , dma_addr_t des_addr
+			    , uint8_t des_space
+			    , uint8_t des_mode
+			    , uint32_t size) 
+{
     //struct pev_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_dma_req dma_req = {0};
 
     int status;
     uint32_t valid_dma_status;
+
+    // we have to introduce the proper way to handle the following chan later on
+    // Tuesday, March 21 16:12:08 CET 2017, hanlee
+    
+    int chan=0;
 
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
@@ -280,7 +295,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dm
 
     dma_req.size       = size;
 
-    dma_req.start_mode = DMA_MODE_PIPE;
+    dma_req.start_mode = (unsigned char) DMA_START_CHAN(chan);
     // dma_req.start_mode = DMA_MODE_BLOCK;
     // dma_req.end_mode   = 0;
 
@@ -316,7 +331,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dm
 #endif
         return status_read;
     }
-    return 0;
+    return  status_success;
 }
 
 static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
@@ -363,10 +378,14 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
     // "offset" will be casted 
 
     status = ifcdaqdrv_dma_read_unlocked(
-            ifcdevice,
-            (dma_addr_t) offset, ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, DMA_PCIE_RR2,
-            dma_buf->u_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
-            size | DMA_SIZE_PKT_1K);
+					 ifcdevice,
+					 (dma_addr_t) offset, 
+					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
+					 DMA_PCIE_RR2,
+					 dma_buf->u_base, 
+					 DMA_SPACE_PCIE | swap_mask(ifcdevice), 
+					 DMA_PCIE_RR2,
+					 size | DMA_SIZE_PKT_1K);
 
     return status;
 }
@@ -391,9 +410,9 @@ uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
     // struct pevx_time tim;  
     // pevx_timer_read(ifcdevice->card, &tim);
     struct tsc_time tim;
-    tsc_timer_read(ifcdevice->card, &tim);
+    tsc_timer_read(&tim);
 
-    return ((uint64_t)tim.time * 1000) + (uint64_t)(tim.utime & 0x1ffff) / 100;
+    return ((uint64_t)tim.msec * 1000) + (uint64_t)(tim.usec & 0x1ffff) / 100;
     
 }
 
@@ -436,10 +455,15 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
         // src_addr sholud be casted
 
         status = ifcdaqdrv_dma_read_unlocked(
-                ifcdevice,
-                (dma_addr_t) src_addr, DMA_SPACE_SHM, DMA_PCIE_RR2,
-                dma_buf->b_base, DMA_SPACE_PCIE | swap_mask(ifcdevice), DMA_PCIE_RR2,
-                current_size | DMA_SIZE_PKT_1K);
+					     ifcdevice,
+					     (dma_addr_t) src_addr, 
+					     DMA_SPACE_SHM, 
+					     DMA_PCIE_RR2,
+					     dma_buf->b_base, 
+					     DMA_SPACE_PCIE | swap_mask(ifcdevice), 
+					     DMA_PCIE_RR2,
+					     current_size | DMA_SIZE_PKT_1K
+					     );
 
         if (status != 0) {
             return status;

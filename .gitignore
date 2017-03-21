@@ -1,0 +1,15 @@
+builddir
+*.o
+*.o
+*~
+*.o.cmd
+SflashDump
+SflashLoad
+TscMon
+*.a
+*.cmd
+.tmp_versions
+*.ko
+*.mod.c
+*.symvers
+*.order
