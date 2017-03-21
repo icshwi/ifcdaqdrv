@@ -190,7 +190,8 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 }
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
-    void *p;
+    //void *p;
+    int ret;
 
     //ifcdevice->sram_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->sram_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -202,7 +203,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     LOG((5, "Trying to allocate %dkiB in kernel\n", ifcdevice->sram_size / 1024));
 
-    if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) == NULL) {
+    if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
         goto err_sram_buf;
     }
 
@@ -218,12 +219,12 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     do {
         LOG((5, "Trying to allocate %dMiB in kernel\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
 
-        p = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
+        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
 
 
-    } while (p == NULL && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
+    } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
-    if(!p) {
+    if(ret) {
         goto err_smem_buf;
     }
 
