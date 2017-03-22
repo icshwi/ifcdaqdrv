@@ -66,7 +66,7 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
 ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t
                                  clrmask){
     int32_t i32_reg_val;
-    int ret;
+    //int ret;
 #if DEBUG
     if ((register_idx < 0) || (register_idx >= 1024)) {
         // error message
@@ -77,10 +77,11 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
 #endif
 
     //i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    //ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
 
 #if DEBUG
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (befor setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
+    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (before setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
     LOG((7, "crate %d: CSR[0x%x:%02x] set=%08x clr=%08x\n",   ifcdevice->card, offset, register_idx, setmask, clrmask));
 #endif
 
@@ -235,6 +236,21 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_user_buf;
     }
 
+#ifdef DEBUG
+
+    /* PRIx64 macro is from inttypes.h */
+    printf("*****************************************************************\n");
+    printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
+    printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
+    printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
+    printf("sram_dma_buf->u_base = 0x%" PRIx64"\n", (uint64_t) ifcdevice->sram_dma_buf->u_base);
+    printf("-----------------------------------------------------------------\n");
+    printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
+    printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
+    printf("smem_dma_buf->u_base = 0x%" PRIx64"\n", (uint64_t) ifcdevice->smem_dma_buf->u_base);
+    printf("*****************************************************************\n");
+#endif
+
     return status_success;
 
 err_smem_user_buf:
@@ -382,7 +398,7 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 					 (dma_addr_t) offset, 
 					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
 					 DMA_PCIE_RR2,
-					 dma_buf->u_base, 
+					 dma_buf->b_base, 
 					 DMA_SPACE_PCIE | swap_mask(ifcdevice), 
 					 DMA_PCIE_RR2,
 					 size | DMA_SIZE_PKT_1K);
@@ -445,7 +461,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 
     src_addr = smem_fmc_offset(ifcdevice) + offset;
     current_size = dma_buf->size;
-    if(DEBUG) ifc_init_timer(ifcdevice);
+    //if(DEBUG) ifc_init_timer(ifcdevice);
     while(size != 0) {
         if(size < dma_buf->size) {
             current_size = size;
@@ -475,9 +491,9 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
         size     -= current_size;
     }
 
-    if(DEBUG) total_time = ifc_get_timer(ifcdevice);
-    if(DEBUG) ifc_stop_timer(ifcdevice);
-    LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB took %llu ms\n", (total_size)/1024.0/1024.0, total_time));
+    //if(DEBUG) total_time = ifc_get_timer(ifcdevice);
+    //if(DEBUG) ifc_stop_timer(ifcdevice);
+    //LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB took %llu ms\n", (total_size)/1024.0/1024.0, total_time));
 
     return status_success;
 }

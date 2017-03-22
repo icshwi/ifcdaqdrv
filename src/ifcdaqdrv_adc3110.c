@@ -521,8 +521,9 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
         return status_i2c_nack;
     }
 #else
-    /* keep compatibility */
-    *ui32_reg_val = 0;
+    /* keep compatibility and remove warnings*/
+    status = 0;
+    *ui32_reg_val = (uint32_t) status;
 #endif
     
     return status_success;

@@ -23,8 +23,8 @@
 //typedef long dma_addr_t;
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
-    char *p;
 #ifdef ENABLE_I2C
+    char *p;
     p = ifcdevice->fru_id->product_name;
     if (p) {
         if (strcmp(p, "ACQ420FMC") == 0) {
@@ -53,6 +53,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         return status_internal;
     }
 #else
+    LOG((5, "Identified (forced) ADC3110\n"));
     adc3110_register(ifcdevice);
 #endif
 
@@ -550,7 +551,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
                 ifcdevice->smem_dma_buf->u_base, nsamples * ifcdevice->sample_size, nsamples, npretrig, last_address, ptq,
                 origin);
 
-        printf("0x%08x: ", origin);
+        printf("0x%08x: ", (int32_t) origin);
         for (itr = origin; itr < origin + 16; ++itr) {
             printf("%08x ", *itr);
         }
@@ -650,7 +651,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             ifcdevice->sram_dma_buf->u_base, nsamples * ifcdevice->sample_size, nsamples, npretrig, last_address, ptq,
             origin);
 
-    printf("0x%08x: ", origin);
+    printf("0x%08x: ", (int32_t) origin);
     for (itr = origin; itr < origin + 16; ++itr) {
         printf("%08x ", *itr);
     }
