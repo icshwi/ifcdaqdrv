@@ -296,11 +296,6 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     int status;
     uint32_t valid_dma_status;
 
-    // we have to introduce the proper way to handle the following chan later on
-    // Tuesday, March 21 16:12:08 CET 2017, hanlee
-    
-    int chan=0;
-
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = src_mode;
@@ -311,7 +306,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 
     dma_req.size       = size;
 
-    dma_req.start_mode = (unsigned char) DMA_START_CHAN(chan);
+    dma_req.start_mode = DMA_START_PIPE;
     // dma_req.start_mode = DMA_MODE_BLOCK;
     // dma_req.end_mode   = 0;
 
@@ -493,7 +488,8 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 
     //if(DEBUG) total_time = ifc_get_timer(ifcdevice);
     //if(DEBUG) ifc_stop_timer(ifcdevice);
-    //LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB took %llu ms\n", (total_size)/1024.0/1024.0, total_time));
+    // LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB took %llu ms\n", (total_size)/1024.0/1024.0, total_time));
+    LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB  - SUCCESS\n", (total_size)/1024.0/1024.0));
 
     return status_success;
 }
