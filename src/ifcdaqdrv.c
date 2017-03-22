@@ -38,6 +38,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         return status_argument_invalid;
     }
 
+    ifcdaqdrvDebug = 7; // Manually set level for debug
     LOG((5, "Level %d tracing set.\n", ifcdaqdrvDebug));
 
     pthread_mutex_lock(&ifcdaqdrv_devlist_lock);
