@@ -51,6 +51,9 @@ static ADC3110_SBCDEVICE adc3110_get_sbc_device(unsigned channel){
 
 ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdaqdrv_status status;
+
+    TRACE_IOC;
+
     status = adc3110_register(ifcdevice);
     ifcdevice->vref_max = 0.5;
     return status;
@@ -200,6 +203,8 @@ ifcdaqdrv_status adc3110_set_led(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_led 
     uint32_t value = 0;
     uint32_t mask  = ADC3110_SUPPORT_IFC_LED_MASK;
 
+    TRACE_IOC;
+
     if (led == ifcdaqdrv_led_ifc) {
         reg = ADC3110_SUPPORT_REG;
 
@@ -274,6 +279,9 @@ ifcdaqdrv_status adc3110_set_dataformat(struct ifcdaqdrv_dev *ifcdevice, ifcdaqd
 
 ifcdaqdrv_status adc3110_adc_resolution(struct ifcdaqdrv_dev *ifcdevice, unsigned *resolution){
     UNUSED(ifcdevice);
+
+    TRACE_IOC;
+
     *resolution = 16;
     return status_success;
 }
@@ -392,7 +400,9 @@ ifcdaqdrv_status adc3110_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC311
     status = ifc_fmc_tcsr_write(ifcdevice, 3, cmd);
     pthread_mutex_unlock(&ifcdevice->sub_lock);
 
-    printf("FMC Serial Bus : wrote 0x%x at %d on device %d\n", (uint32_t) data, addr, (int) device);
+#ifdef ENABLE_TRACE_SERIAL
+    printf("    [SERIAL WR]: data=0x%x addr=%d dev=%d\n", (uint32_t) data, addr, (int) device);
+#endif
 
     return status;
 }
@@ -425,8 +435,10 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
 
     status = ifc_fmc_tcsr_read(ifcdevice, 4, (int32_t *) value);
     pthread_mutex_unlock(&ifcdevice->sub_lock);
-  
-    printf("FMC serial read %d at %d from device %d\n", (uint32_t) *value, addr, (int) device);
+
+#ifdef ENABLE_TRACE_SERIAL
+    printf("    [SERIAL RR]: addr 0x%d device=%d value=%x\n", addr, (int) device, (uint32_t) *value);
+#endif
   
     return status;
 }
@@ -437,6 +449,8 @@ ifcdaqdrv_status ifc_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struc
     int  status;
     char signature[ADC3110_SIGNATURELEN + 1];
     char *p;
+
+    TRACE_IOC;
 
     status = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000, 8, signature, sizeof(signature));
     if (status) {
@@ -475,6 +489,7 @@ ifcdaqdrv_status ifc_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struc
 
 /* seems unneccessary */
 ifcdaqdrv_status adc3110_ctrl_front_panel_gpio(struct ifcdaqdrv_dev *ifcdevice, int32_t value){
+    TRACE_IOC;
     return ifc_fmc_tcsr_write(ifcdevice, 5, value);
 }
 
@@ -482,6 +497,8 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_ChannelOffsetCompensation(struct ifcdaqdrv_
                                                                int32_t *offsetcompensation){
     *offsetcompensation = 0;
     int status;
+
+    TRACE_IOC;
 
     if (channel >= ifcdevice->nchannels) {
         return status_argument_invalid;
@@ -526,6 +543,7 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
 
     device |= ifcdevice->fmc == 1 ? IFC_FMC1_I2C_BASE : IFC_FMC2_I2C_BASE;
 
+    TRACE_IOC;
 
     /*TODO: check usage of i2c_read. Who is the first argument ? */
     
@@ -589,6 +607,8 @@ ifcdaqdrv_status adc3110_set_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
     uint32_t PLL2_N      = 25; // 1..262143
     int32_t  i32_reg_val = 0;
 
+    TRACE_IOC;
+
     // For now, only support 2400 and 2500 Mhz
     if (!(frequency == 2400e6 || frequency == 2500e6)) {
         return status_argument_range;
@@ -617,6 +637,8 @@ ifcdaqdrv_status adc3110_get_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
     uint32_t         ui32_reg_val;
     ifcdaqdrv_status status;
 
+    TRACE_IOC;
+
     status = adc3110_SerialBus_read(ifcdevice, LMK04906, 0x1E, &ui32_reg_val);
     if (status) {
         return status;
@@ -631,6 +653,8 @@ ifcdaqdrv_status adc3110_get_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
 ifcdaqdrv_status adc3110_get_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_clock *clock){
     ifcdaqdrv_status status;
     int32_t          i32_reg_val;
+
+    TRACE_IOC;
 
     status = ifc_fmc_tcsr_read(ifcdevice, 2, &i32_reg_val);
     if (status) {
@@ -647,6 +671,9 @@ ifcdaqdrv_status adc3110_get_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
 }
 
 ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_clock clock){
+    
+    TRACE_IOC;
+
     switch (clock) {
     case ifcdaqdrv_clock_internal:
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0A, 0x11404200);     // OscOut_Type = 1 (LVDS) Powerdown OscIn PowerDown = 0 VCO_DIV = 2
@@ -708,6 +735,8 @@ ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
 ifcdaqdrv_status adc3110_set_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint32_t divisor){
     int32_t i32_reg_val;
 
+    TRACE_IOC;
+
     if (divisor < 1 || divisor > 1045) {
         return status_argument_range;
     }
@@ -726,6 +755,8 @@ ifcdaqdrv_status adc3110_get_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
     ifcdaqdrv_status status;
     uint32_t         ui32_reg_val;
 
+    TRACE_IOC;
+
     status = adc3110_SerialBus_read(ifcdevice, LMK04906, 0x1, &ui32_reg_val);
     if (status) {
         return status;
@@ -739,6 +770,8 @@ ifcdaqdrv_status adc3110_get_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
 
 ifcdaqdrv_status adc3110_adc_init_priv(struct ifcdaqdrv_dev *ifcdevice, ADC3110_SBCDEVICE device){
     int res = 0;
+
+    TRACE_IOC;
 
     res += adc3110_SerialBus_write(ifcdevice, device, 0x08, 0x19); // ADS42LB69_Reg 0x08 RESET device
 
@@ -782,6 +815,8 @@ ifcdaqdrv_status adc3110_adc_init_priv(struct ifcdaqdrv_dev *ifcdevice, ADC3110_
 ifcdaqdrv_status adc3110_ADC_setOffset(struct ifcdaqdrv_dev *ifcdevice, unsigned channel, uint16_t offset){
     int               status = 0;
     int32_t           reg;
+
+    TRACE_IOC;
 
     ADC3110_SBCDEVICE device = adc3110_get_sbc_device(channel);
 
@@ -833,6 +868,8 @@ ifcdaqdrv_status adc3110_set_gain(struct ifcdaqdrv_dev *ifcdevice, unsigned chan
     ifcdaqdrv_status  status;
     ADC3110_SBCDEVICE device      = adc3110_get_sbc_device(channel);
     int32_t           i32_reg_val = 0;
+
+    TRACE_IOC;
 
     // adjust gain Vpp to supported values
     if (gain <= 2 / 2.5) {
@@ -900,6 +937,8 @@ ifcdaqdrv_status adc3110_get_gain(struct ifcdaqdrv_dev *ifcdevice, unsigned chan
     uint32_t         ui32_reg_val;
     ifcdaqdrv_status status;
     int              addr = (channel % 2 == 0) ? 0x0B : 0x0C;
+
+    TRACE_IOC;
 
     status = adc3110_SerialBus_read(ifcdevice, adc3110_get_sbc_device(channel), addr, &ui32_reg_val);
     if (status) {
@@ -982,6 +1021,8 @@ ifcdaqdrv_status adc3110_set_test_pattern(struct ifcdaqdrv_dev *ifcdevice, unsig
     ADC3110_SBCDEVICE device;
     uint32_t          i32_reg_val;
 
+    TRACE_IOC;
+
     device = adc3110_get_sbc_device(channel);
 
     status = adc3110_SerialBus_read(ifcdevice, device, 0x0F, &i32_reg_val);
@@ -1033,6 +1074,8 @@ ifcdaqdrv_status adc3110_get_test_pattern(struct ifcdaqdrv_dev *ifcdevice, unsig
     ADC3110_SBCDEVICE device;
     uint32_t          i32_reg_val;
 
+    TRACE_IOC;
+
     device = adc3110_get_sbc_device(channel);
 
     status = adc3110_SerialBus_read(ifcdevice, device, 0x0F, &i32_reg_val);
@@ -1073,6 +1116,8 @@ ifcdaqdrv_status adc3110_set_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, 
     uint16_t ui16_reg_val = (uint16_t)threshold + 32768;
     // threshold += 32768; // Threshold should be ADC value (unsigned).
 
+    TRACE_IOC;
+
     return ifc_scope_acq_tcsr_setclr(ifcdevice, 1, ui16_reg_val & 0xFFFF, 0xFFFF);
 }
 
@@ -1080,6 +1125,8 @@ ifcdaqdrv_status adc3110_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, 
     ifcdaqdrv_status status;
     int32_t          threshold_adc;
     int32_t          i32_reg_val;
+
+    TRACE_IOC;
 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 1, &i32_reg_val);
     if (status) {
@@ -1103,6 +1150,8 @@ ifcdaqdrv_status adc3110_read(struct ifcdaqdrv_dev *ifcdevice, void *dst, size_t
     int32_t *target; /* Copy to this address */
     int16_t *itr;    /* Iterator for iterating over "data" */
     int16_t *origin; /* Copy from this address */
+
+    TRACE_IOC;
 
     /* Multiply offsets by number of channels */
     target = ((int32_t *)dst) + dst_offset;
@@ -1136,6 +1185,8 @@ ifcdaqdrv_status adc3110_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t chann
     int16_t *itr;
     int32_t *target = res;
 
+    TRACE_IOC;
+
     if(ifcdevice->mode == ifcdaqdrv_acq_mode_smem) {
         for (itr = origin; itr < origin + nelm * 8; ++target, itr += 8) {
             *target = (int16_t)(*(itr + channel) - 32768);
@@ -1157,6 +1208,8 @@ ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t 
     ifcdaqdrv_status status;
     int32_t          i32_reg_val;
 
+    TRACE_IOC;
+
     status = ifc_fmc_tcsr_read(ifcdevice, 0, &i32_reg_val);
 
     if (revision) {
@@ -1177,6 +1230,9 @@ ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t 
 ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max){
     int32_t i32_reg_val;
     int     status;
+
+    TRACE_IOC;
+
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if (i32_reg_val & IFC_SCOPE_TCSR_CS_SRAM_Buffer_Size_MASK) {
         *nsamples_max = 32 * 1024;

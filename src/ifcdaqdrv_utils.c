@@ -48,7 +48,6 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
     }
     int32_t i32_reg_val;
     ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
-
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (befor write)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (write)\n",       ifcdevice->card, offset, register_idx, value));
 #endif
