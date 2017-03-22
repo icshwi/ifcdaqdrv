@@ -59,6 +59,9 @@ ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice) {
 ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     int status = 0;
     uint32_t nsamples_max;
+
+    TRACE_IOC;
+
     ifcdevice->init_adc              = adc3110_init_adc;
     ifcdevice->get_signature         = adc3110_get_signature;
     ifcdevice->set_led               = adc3110_set_led;
@@ -120,7 +123,9 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
 
 ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     int res = 0;
-
+    
+    TRACE_IOC;
+ 
     // led off
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_off);
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_off);
@@ -238,6 +243,9 @@ ifcdaqdrv_status adc3110_set_led(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_led 
 ifcdaqdrv_status adc3110_set_dataformat(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_dataformat dataformat){
     int res = 0;
     int i;
+
+    TRACE_IOC;
+
     for (i = 0; i < 4; ++i) {
         uint32_t val;
         adc3110_SerialBus_read(ifcdevice, adc3110_get_sbc_device(i * 2), 0x08, &val);
@@ -383,6 +391,9 @@ ifcdaqdrv_status adc3110_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC311
 
     status = ifc_fmc_tcsr_write(ifcdevice, 3, cmd);
     pthread_mutex_unlock(&ifcdevice->sub_lock);
+
+    printf("FMC Serial Bus : wrote 0x%x at %d on device %d\n", (uint32_t) data, addr, (int) device);
+
     return status;
 }
 
@@ -390,6 +401,8 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
                                                  uint32_t *value){
     uint32_t cmd = adc3110_SerialBus_prepare_command(device, addr, 0); // create read command
     int      status;
+
+    TRACE_IOC;
 
     pthread_mutex_lock(&ifcdevice->sub_lock);
     // check if serial bus is ready
@@ -412,6 +425,9 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
 
     status = ifc_fmc_tcsr_read(ifcdevice, 4, (int32_t *) value);
     pthread_mutex_unlock(&ifcdevice->sub_lock);
+  
+    printf("FMC serial read %d at %d from device %d\n", (uint32_t) *value, addr, (int) device);
+  
     return status;
 }
 

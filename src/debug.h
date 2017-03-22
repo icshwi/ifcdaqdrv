@@ -40,6 +40,8 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #define DEBUG 1
 #endif /* NDEBUG */
 
+#define TRACE_IOC fprintf(stderr,"[TRACE] Program has enter %s\n",__func__)
+
 #define LOG(x)    do { LOG_ARGS x; } while (0)
 
 #define LOG_ARGS(level, fmt, args...) \

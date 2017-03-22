@@ -237,17 +237,21 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     }
 
 #ifdef DEBUG
+    uint64_t tp_sram;
+    uint64_t tp_smem;
+    tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
+    tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
 
     /* PRIx64 macro is from inttypes.h */
     printf("*****************************************************************\n");
     printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
     printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
     printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
-    printf("sram_dma_buf->u_base = 0x%" PRIx64"\n", (uint64_t) ifcdevice->sram_dma_buf->u_base);
+    printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
     printf("-----------------------------------------------------------------\n");
     printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
     printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
-    printf("smem_dma_buf->u_base = 0x%" PRIx64"\n", (uint64_t) ifcdevice->smem_dma_buf->u_base);
+    printf("smem_dma_buf->u_base = 0x%p \n", (void *) ifcdevice->smem_dma_buf->u_base);
     printf("*****************************************************************\n");
 #endif
 
