@@ -437,7 +437,7 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
     pthread_mutex_unlock(&ifcdevice->sub_lock);
 
 #ifdef ENABLE_TRACE_SERIAL
-    printf("    [SERIAL RR]: addr 0x%d device=%d value=%x\n", addr, (int) device, (uint32_t) *value);
+    printf("    [SERIAL RD]: data=0x%x addr=%d dev=%d\n", (uint32_t) *value, addr, (int) device);
 #endif
   
     return status;
@@ -608,6 +608,7 @@ ifcdaqdrv_status adc3110_set_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
     int32_t  i32_reg_val = 0;
 
     TRACE_IOC;
+    TRACE_PARAMD("freq", frequency);
 
     // For now, only support 2400 and 2500 Mhz
     if (!(frequency == 2400e6 || frequency == 2500e6)) {
@@ -647,6 +648,8 @@ ifcdaqdrv_status adc3110_get_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
         *frequency = ((ui32_reg_val >> 5) & 0x1FFFF) * 1e8;
     }
 
+
+    TRACE_GET_PARAMD("freq", *frequency);
     return status;
 }
 
@@ -667,12 +670,15 @@ ifcdaqdrv_status adc3110_get_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
         *clock = ifcdaqdrv_clock_external;
     }
 
+    TRACE_GET_PARAMD("clk_source", *clock);
+
     return status;
 }
 
 ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_clock clock){
     
     TRACE_IOC;
+    TRACE_PARAM("clk_source", clock);
 
     switch (clock) {
     case ifcdaqdrv_clock_internal:
@@ -736,6 +742,7 @@ ifcdaqdrv_status adc3110_set_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
     int32_t i32_reg_val;
 
     TRACE_IOC;
+    TRACE_PARAM("clk_divisor", divisor);
 
     if (divisor < 1 || divisor > 1045) {
         return status_argument_range;
@@ -765,6 +772,7 @@ ifcdaqdrv_status adc3110_get_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
         *divisor = (ui32_reg_val >> 5) & 0x3FF;
     }
 
+    TRACE_GET_PARAMD("clk_divisor", *divisor);
     return status;
 }
 
