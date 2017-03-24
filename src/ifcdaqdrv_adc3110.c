@@ -23,6 +23,8 @@ static const double   valid_clocks[] = {2400e6, 2500e6, 0};
 
 static int adc3110_SerialBus_isReady(struct ifcdaqdrv_dev *ifcdevice);
 static uint32_t adc3110_SerialBus_prepare_command(ADC3110_SBCDEVICE device, int addr, int writecmd);
+static ifcdaqdrv_status adc3110_dumpMainCSR(void);
+
 
 
 static ADC3110_SBCDEVICE adc3110_get_sbc_device(unsigned channel);
@@ -411,7 +413,7 @@ ifcdaqdrv_status adc3110_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC311
     pthread_mutex_unlock(&ifcdevice->sub_lock);
 
 #ifdef ENABLE_TRACE_SERIAL
-    printf("    [SERIAL WR]: Exiting routine..\n");
+    adc3110_dumpMainCSR();
 #endif
 
     return status;
@@ -448,6 +450,7 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
 
 #ifdef ENABLE_TRACE_SERIAL
     printf("    [SERIAL RD]: data=0x%x addr=%d dev=%d\n", (uint32_t) *value, addr, (int) device);
+    adc3110_dumpMainCSR();
 #endif
   
     return status;
@@ -1262,6 +1265,43 @@ ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, 
         *nsamples_max = 16 * 1024;
     }
     return status;
+}
+
+static ifcdaqdrv_status adc3110_dumpMainCSR(void)
+{
+    // Read Main CSR
+    uint32_t ui32_mcsr;
+    int ret;
+
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + 0x1000 + (0x81 * 4), &ui32_mcsr);
+    if (ret)
+        return status_internal;
+
+    #define ADC_RESET_MASK    0x00000100
+    #define ADC_RESET_SFT     8
+    #define ADC_SYNC_MASK     0x00000200
+    #define ADC_SYNC_SFT      9
+    #define ADC_01PWRD_MASK   0x00000400
+    #define ADC_01PWRD_SFT    10
+    #define ADC_23PWRD_MASK   0x00000800
+    #define ADC_23PWRD_SFT    11
+    #define ADC_4567PWRD_MASK 0x00001000
+    #define ADC_4567PWRD_SFT    12
+    #define MMCM_RST_MASK     0x00004000
+    #define MMCM_RST_SFT      14
+    #define MMCM_LOCK_MASK    0x00008000
+    #define MMCM_LOCK_SFT     15
+
+    printf("[FMC MAIN CSR] -> ");
+    printf("ADC_RESET = %d " (ui32_mcsr & ADC_RESET_MASK)>>ADC_RESET_SFT );
+    printf("ADC_SYNC = %d " (ui32_mcsr & ADC_SYNC_MASK)>>ADC_SYNC_SFT );
+    printf("ADC_01PWRD = %d " (ui32_mcsr & ADC_01PWRD_MASK)>>ADC_01PWRD_SFT );
+    printf("ADC_23PWRD = %d " (ui32_mcsr & ADC_23PWRD_MASK)>>ADC_23PWRD_SFT );
+    printf("ADC_4567PWRD = %d " (ui32_mcsr & ADC_4567PWRD_MASK)>>ADC_4567PWRD_SFT );
+    printf("MMCM_RESET = %d " (ui32_mcsr & MMCM_RST_MASK)>>MMCM_RST_SFT );
+    printf("MMCM_LOCK = %d \n" (ui32_mcsr & MMCM_LOCK_MASK)>>MMCM_LOCK_SFT );
+
+    return status_success;
 }
 
 #if 0
