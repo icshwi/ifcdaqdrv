@@ -130,8 +130,10 @@ ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     TRACE_IOC;
  
     // led off
-    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_off);
-    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_off);
+    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_blink_fast);
+    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_blink_slow);
+
+    printf("Reseting ADCs ...... \n");
 
     ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1900); // ReleasePowerdown ADC #01
     usleep(1000);
@@ -150,6 +152,8 @@ ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     /*
      * Setup LMK04906
      */
+    printf("Setup LMK04906 -------------------------------------------------\n");
+  
     // Reset device
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x00, 0x00020000);
     usleep(2000);
@@ -176,6 +180,8 @@ ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x19, 0x00000000); // DAC config not used
 
     adc3110_set_clock_source(ifcdevice, ifcdaqdrv_clock_internal);
+
+    printf("Setup the ADCs -------------------------------------------- \n");
 
     adc3110_adc_init_priv(ifcdevice, ADS01);
     adc3110_adc_init_priv(ifcdevice, ADS23);
@@ -391,6 +397,10 @@ ifcdaqdrv_status adc3110_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC311
         return status_i2c_busy;
     }
 
+#ifdef ENABLE_TRACE_SERIAL
+    printf("    [SERIAL WR]: data=0x%x addr=%d dev=%d\n", (uint32_t) data, addr, (int) device);
+#endif
+
     status = ifc_fmc_tcsr_write(ifcdevice, 4, data);
     if (status) {
         pthread_mutex_unlock(&ifcdevice->sub_lock);
@@ -401,7 +411,7 @@ ifcdaqdrv_status adc3110_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC311
     pthread_mutex_unlock(&ifcdevice->sub_lock);
 
 #ifdef ENABLE_TRACE_SERIAL
-    printf("    [SERIAL WR]: data=0x%x addr=%d dev=%d\n", (uint32_t) data, addr, (int) device);
+    printf("    [SERIAL WR]: Exiting routine..\n");
 #endif
 
     return status;
@@ -614,6 +624,7 @@ ifcdaqdrv_status adc3110_set_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
     if (!(frequency == 2400e6 || frequency == 2500e6)) {
         return status_argument_range;
     }
+
     PLL2_N       = frequency / 1e8;
 
     i32_reg_val  = 1 << 23;       // PLL Fast Phase Detector Frequency (>100Mhz)
@@ -626,10 +637,13 @@ ifcdaqdrv_status adc3110_set_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
 
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, i32_reg_val);
 
-    // usleep(2000);
+    /*********************************************************************************/
+    //usleep(2000);
 
-    // adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, i32_reg_val); // PLL2 P/N Recallibration
-    // adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0C, 0x03800000); // PLL2 LD pin programmable
+    //adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, i32_reg_val); // PLL2 P/N Recallibration
+    //adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0C, 0x03800000); // PLL2 LD pin programmable
+
+    /********************************************************************************************/
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0C, 0x02800000); // PLL2 LD pin programmable
     return status_success;
 }
@@ -670,7 +684,7 @@ ifcdaqdrv_status adc3110_get_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
         *clock = ifcdaqdrv_clock_external;
     }
 
-    TRACE_GET_PARAMD("clk_source", *clock);
+    TRACE_GET_PARAM("clk_source", *clock);
 
     return status;
 }
@@ -684,7 +698,7 @@ ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
     case ifcdaqdrv_clock_internal:
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0A, 0x11404200);     // OscOut_Type = 1 (LVDS) Powerdown OscIn PowerDown = 0 VCO_DIV = 2
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0B, 0x37f28000);     // Device MODE=0x6 + No SYNC output
-        adc3110_set_clock_frequency(ifcdevice, 2500e6);
+        adc3110_set_clock_frequency(ifcdevice, 2400e6);
         adc3110_set_clock_divisor(ifcdevice, 10);
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1A, 0x8FA00000);     // PLL2 used / ICP = 3200uA
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1B, 0x00000000);     // PLL1 not used

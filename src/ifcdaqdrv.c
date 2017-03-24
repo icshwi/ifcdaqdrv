@@ -38,7 +38,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         return status_argument_invalid;
     }
 
-    ifcdaqdrvDebug = 6; // Manually set level for debug
+    ifcdaqdrvDebug = 7; // Manually set level for debug
     LOG((5, "Level %d tracing set.\n", ifcdaqdrvDebug));
 
     pthread_mutex_lock(&ifcdaqdrv_devlist_lock);
@@ -100,13 +100,14 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
     ifcdevice->tosca_signature = i32_reg_val;
 
+
     /* Read APP signature */
     status = ifc_scope_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if (status) {
         status = status_internal;
         goto err_read;
     }
-
+  
     switch (i32_reg_val) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
@@ -125,6 +126,11 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         break;
     }
     ifcdevice->app_signature = i32_reg_val;
+
+    /* Activate FMC */
+    status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
+    printf("Wrote 0x31100000 to 0x80 and got %d as answer\n", status); 
+
 #if DEBUG
     printf("TOSCA signature: %08x, APP signature: %08x, ", ifcdevice->tosca_signature, ifcdevice->app_signature);
     /* Read FMC FDK signature */
