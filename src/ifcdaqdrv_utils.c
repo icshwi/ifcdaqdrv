@@ -173,6 +173,7 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 
     if(ifcdevice->smem_dma_buf) {
         //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
+        tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
         tsc_kbuf_free(ifcdevice->smem_dma_buf);
         free(ifcdevice->smem_dma_buf);
         ifcdevice->smem_dma_buf = NULL;
@@ -180,6 +181,7 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 
     if(ifcdevice->sram_dma_buf){
         // pevx_buf_free(ifcdevice->card, ifcdevice->sram_dma_buf);
+        tsc_kbuf_munmap(ifcdevice->sram_dma_buf);
         tsc_kbuf_free(ifcdevice->sram_dma_buf);
         free(ifcdevice->sram_dma_buf);
         ifcdevice->sram_dma_buf = NULL;
@@ -209,12 +211,15 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->sram_dma_buf->size = ifcdevice->sram_size;
 
-    LOG((5, "Trying to allocate %dkiB in kernel\n", ifcdevice->sram_size / 1024));
-
+    LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_size / 1024));
     if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
         goto err_sram_buf;
     }
 
+    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
+        goto err_mmap_sram;
+    }
 
     //ifcdevice->smem_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -225,7 +230,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     // Try to allocate as large dma memory as possible
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
-        LOG((5, "Trying to allocate %dMiB in kernel\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
+        LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
 
         ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
 
@@ -236,10 +241,16 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
+    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
+        goto err_mmap_smem;
+    }
+  
+
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
     if(!ifcdevice->all_ch_buf){
-        goto err_smem_user_buf;
+        goto err_mmap_smem;
     }
 
 #ifdef DEBUG
@@ -263,17 +274,22 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     return status_success;
 
+err_mmap_smem:
+    tsc_kbuf_munmap(ifcdevice->smem_dma_buf); 
+
 err_smem_user_buf:
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->smem_dma_buf);
  
-
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->sram_dma_buf);
+
+err_mmap_sram:
+    tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
 
 err_sram_buf:
     free(ifcdevice->sram_dma_buf);
