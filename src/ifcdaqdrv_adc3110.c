@@ -1293,13 +1293,13 @@ static ifcdaqdrv_status adc3110_dumpMainCSR(void)
     #define MMCM_LOCK_SFT     15
 
     printf("[FMC MAIN CSR] -> ");
-    // printf("ADC_RESET = %d ", (ui32_mcsr & ADC_RESET_MASK)>>ADC_RESET_SFT );
-    // printf("ADC_SYNC = %d ", (ui32_mcsr & ADC_SYNC_MASK)>>ADC_SYNC_SFT );
-    // printf("ADC_01PWRD = %d ", (ui32_mcsr & ADC_01PWRD_MASK)>>ADC_01PWRD_SFT );
-    // printf("ADC_23PWRD = %d ", (ui32_mcsr & ADC_23PWRD_MASK)>>ADC_23PWRD_SFT );
-    // printf("ADC_4567PWRD = %d ", (ui32_mcsr & ADC_4567PWRD_MASK)>>ADC_4567PWRD_SFT );
-    // printf("MMCM_RESET = %d ", (ui32_mcsr & MMCM_RST_MASK)>>MMCM_RST_SFT );
-    printf("MMCM_LOCK = %d \n", (ui32_mcsr & MMCM_LOCK_MASK)>>MMCM_LOCK_SFT );
+    // printf("ADC_RESET = %d ", (i32_mcsr & ADC_RESET_MASK)>>ADC_RESET_SFT );
+    // printf("ADC_SYNC = %d ", (i32_mcsr & ADC_SYNC_MASK)>>ADC_SYNC_SFT );
+    // printf("ADC_01PWRD = %d ", (i32_mcsr & ADC_01PWRD_MASK)>>ADC_01PWRD_SFT );
+    // printf("ADC_23PWRD = %d ", (i32_mcsr & ADC_23PWRD_MASK)>>ADC_23PWRD_SFT );
+    // printf("ADC_4567PWRD = %d ", (i32_mcsr & ADC_4567PWRD_MASK)>>ADC_4567PWRD_SFT );
+    // printf("MMCM_RESET = %d ", (i32_mcsr & MMCM_RST_MASK)>>MMCM_RST_SFT );
+    printf("MMCM_LOCK = %d \n", (i32_mcsr & MMCM_LOCK_MASK)>>MMCM_LOCK_SFT );
 
     return status_success;
 }
