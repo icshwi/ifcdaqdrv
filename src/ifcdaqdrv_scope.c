@@ -848,7 +848,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
     TRACE_IOC;
     TRACE_PARAM("set nsamples", nsamples);
 
-
+    /* ******************* Avoid using SRAM mode ****************************/
+#if 0
     // If samples fit in sram use sram.
     if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) {
 
@@ -862,6 +863,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
 
         return status;
     }
+#endif
 
     ifcdaqdrv_scope_get_average(ifcdevice, &average);
 
