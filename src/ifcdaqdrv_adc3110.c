@@ -701,7 +701,7 @@ ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
     case ifcdaqdrv_clock_internal:
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0A, 0x11404200);     // OscOut_Type = 1 (LVDS) Powerdown OscIn PowerDown = 0 VCO_DIV = 2
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0B, 0x37f28000);     // Device MODE=0x6 + No SYNC output
-        adc3110_set_clock_frequency(ifcdevice, 2400e6);
+        adc3110_set_clock_frequency(ifcdevice, 2500e6);
         adc3110_set_clock_divisor(ifcdevice, 10);
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1A, 0x8FA00000);     // PLL2 used / ICP = 3200uA
         adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1B, 0x00000000);     // PLL1 not used
@@ -789,7 +789,7 @@ ifcdaqdrv_status adc3110_get_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
         *divisor = (ui32_reg_val >> 5) & 0x3FF;
     }
 
-    TRACE_GET_PARAMD("clk_divisor", *divisor);
+    TRACE_GET_PARAM("clk_divisor", *divisor);
     return status;
 }
 

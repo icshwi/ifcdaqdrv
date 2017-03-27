@@ -42,7 +42,7 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 
 
 #define ENABLE_TRACE_IOC
-#define ENABLE_TRACE_SERIAL
+#define NENABLE_TRACE_SERIAL
 
 #ifdef ENABLE_TRACE_IOC
 	#define TRACE_IOC fprintf(stderr,"[TRACE] Program has enter %s\n",__func__)

@@ -283,6 +283,8 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t               i32_reg_val;
 
+    TRACE_IOC;
+
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
@@ -369,6 +371,8 @@ ifcdaqdrv_status ifcdaqdrv_disarm_device(struct ifcdaqdrv_usr *ifcuser){
     int32_t               i32_reg_val;
     int32_t               i;
 
+    TRACE_IOC;
+
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
@@ -431,6 +435,8 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
     struct ifcdaqdrv_dev *ifcdevice;
 
     ifcdevice = ifcuser->device;
+
+    TRACE_IOC;
 
     if (!ifcdevice) {
         return status_no_device;

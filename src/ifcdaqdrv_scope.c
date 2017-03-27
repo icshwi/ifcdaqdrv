@@ -62,6 +62,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcdaqdrv_scope_set_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned nsamples){
     int32_t i32_reg_val = 0;
+
+    TRACE_IOC;
+    TRACE_PARAM("sram_nsamples", nsamples);
+
     switch (nsamples) {
     case 32 * 1024:
         i32_reg_val = 0;
@@ -90,6 +94,9 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_sram_nsamples(struct ifcdaqdrv_dev *ifcdevi
 
 ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned *nsamples){
     int32_t i32_reg_val;
+    
+    TRACE_IOC;
+
     int     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     switch ((i32_reg_val & IFC_SCOPE_TCSR_CS_SRAM_ACQ_Size_MASK) >> 12) {
     case 0:
@@ -114,6 +121,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevi
         return status_internal;
     }
     LOG((7, "acq %d, reg_val %08x\n", *nsamples, i32_reg_val));
+    TRACE_GETPARAM("sram_nsamples", *nsamples);
+
     return status;
 }
 
@@ -126,6 +135,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     ifcdaqdrv_status status;
     uint32_t acq_size;
     uint32_t average;
+
+    TRACE_IOC;
 
     if(!ifcdevice->nchannels || !ifcdevice->sample_size) {
         return status_internal;
@@ -146,6 +157,9 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     }
 
     *nsamples = acq_size / ifcdevice->nchannels / ifcdevice->sample_size;
+
+    TRACE_PARAM("smem_nsamples", *nsamples);
+
     return status;
 }
 
@@ -161,6 +175,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     uint32_t average;
     ifcdaqdrv_status status;
     uint32_t nchannels;
+
+    TRACE_IOC;
+    TRACE_PARAM("set smem nsamples", nsamples);
+
 
     status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
 
@@ -425,6 +443,8 @@ ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     int32_t i32_reg_val;
     int     status;
 
+    TRACE_IOC;
+
     status = ifc_xuser_tcsr_read(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice) + 2, &i32_reg_val);
 
     if (ifcdevice->sample_size == 4) {
@@ -432,6 +452,9 @@ ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     } else { // sample_size == 2
         *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SRAMx_LA_Last_Address_MASK) >> 1;
     }
+
+    TRACE_GETPARAM("sram last addr", *last_address);
+
     return status;
 }
 
@@ -439,9 +462,14 @@ ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     int32_t i32_reg_val;
     int     status;
 
+    TRACE_IOC;
+
     status = ifc_xuser_tcsr_read(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice) + 2, &i32_reg_val);
 
     *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SMEMx_LA_Last_Address_MASK) >> 4;
+
+    TRACE_GETPARAM("smem last addr", *last_address);
+
     return status;
 }
 
@@ -454,6 +482,10 @@ ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq
     if (ptq > 7) {
         return status_argument_range;
     }
+
+    TRACE_IOC;
+    TRACE_PARAM("set pt quota", ptq);
+
 
     return ifc_xuser_tcsr_setclr(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice), ptq << 5,
                                  IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
@@ -476,7 +508,11 @@ ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *pt
         return status_argument_invalid;
     }
 
+    TRACE_IOC;
+
     *ptq = ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK) >> 5);
+
+    TRACE_GETPARAM("ptq", *ptq);
 
     return status;
 }
@@ -488,6 +524,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
     int32_t              *res          = data;
     uint32_t              last_address = 0, nsamples = 0, npretrig = 0, ptq = 0;
     uint32_t channel;
+
+    TRACE_IOC;
 
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
@@ -574,6 +612,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     int32_t          *origin;
     int32_t          *res;
     uint32_t          last_address,  nsamples,  npretrig,  ptq;
+
+    TRACE_IOC;
 
     offset = 0;
     origin = NULL;
@@ -712,6 +752,11 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
     int32_t i32_reg_val;
     int32_t cs_reg;
     int32_t trig_reg;
+
+    TRACE_IOC;
+    TRACE_PARAM("switch mode", mode);
+
+
     /* Return immediately if device already is in correct mode */
     if(mode == ifcdevice->mode) {
         return status_success;
@@ -800,6 +845,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status status;
     uint32_t average;
 
+    TRACE_IOC;
+    TRACE_PARAM("set nsamples", nsamples);
+
+
     // If samples fit in sram use sram.
     if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) {
 
@@ -847,6 +896,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     uint32_t              nsamples;
     uint32_t              ptq;
 
+    TRACE_IOC;
+    TRACE_PARAM("npretrig", npretrig);
+
+
     /* Soft triggering doesn't work well enough with pre-trigger buffer */
     if(ifcdevice->trigger_type == ifcdaqdrv_trigger_soft && npretrig > 0) {
         return status_config;
@@ -878,6 +931,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status      status;
     uint32_t              nsamples, ptq;
 
+    TRACE_IOC;
+
     switch(ifcdevice->mode){
     case ifcdaqdrv_acq_mode_sram:
         status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
@@ -900,12 +955,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     }
 
     *npretrig = ptq * nsamples;
+
+    TRACE_GETPARAM("npretrig", *npretrig);
+
     return status_success;
 }
 
 ifcdaqdrv_status ifcdaqdrv_scope_get_average(struct ifcdaqdrv_dev *ifcdevice, uint32_t *average) {
     int32_t               i32_reg_val;
     ifcdaqdrv_status      status;
+
+    TRACE_IOC;
 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) {
@@ -921,6 +981,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, ui
     uint32_t              i;
     int32_t               i32_reg_val;
     ifcdaqdrv_status      status;
+
+    TRACE_IOC;
+    TRACE_PARAM("set average", average);
+
 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if(status){
