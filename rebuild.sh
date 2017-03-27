@@ -18,7 +18,7 @@
 # Author : Jeong Han Lee
 # email  : han.lee@esss.se
 # Date   : 
-# Version : 0.0.1
+# Version : 0.0.2
 
 declare -gr SCRIPT="$(realpath "$0")"
 declare -gr TOP="$(dirname "$SCRIPT")"
@@ -27,9 +27,19 @@ declare -g  PROJECT=""
 function pushd() { builtin pushd "$@" > /dev/null; }
 function popd()  { builtin popd  "$@" > /dev/null; }
 
+make_file_name="Makefile"
+# make_file_name="GNUmakefile"
+
 
 eval $(cat ${TOP}/Makefile | grep -E "^(PROJECT)=")
 
+if [ -z "${PROJECT}" ]
+then
+      echo "PROJECT is empty or "
+      echo "PROJECT should have no splace e.g. PROJECT=project_name"
+      echo "Please check ${make_file_name} in ${TOP}"
+      exit;
+fi
 
 printf "You are re-building %s ? \n" "${PROJECT}"
 
