@@ -121,7 +121,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevi
         return status_internal;
     }
     LOG((7, "acq %d, reg_val %08x\n", *nsamples, i32_reg_val));
-    TRACE_GETPARAM("sram_nsamples", *nsamples);
+    TRACE_GET_PARAM("sram_nsamples", *nsamples);
 
     return status;
 }
@@ -453,7 +453,7 @@ ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
         *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SRAMx_LA_Last_Address_MASK) >> 1;
     }
 
-    TRACE_GETPARAM("sram last addr", *last_address);
+    TRACE_GET_PARAM("sram last addr", *last_address);
 
     return status;
 }
@@ -468,7 +468,7 @@ ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
 
     *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SMEMx_LA_Last_Address_MASK) >> 4;
 
-    TRACE_GETPARAM("smem last addr", *last_address);
+    TRACE_GET_PARAM("smem last addr", *last_address);
 
     return status;
 }
@@ -512,7 +512,7 @@ ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *pt
 
     *ptq = ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK) >> 5);
 
-    TRACE_GETPARAM("ptq", *ptq);
+    TRACE_GET_PARAM("ptq", *ptq);
 
     return status;
 }
@@ -956,7 +956,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
 
     *npretrig = ptq * nsamples;
 
-    TRACE_GETPARAM("npretrig", *npretrig);
+    TRACE_GET_PARAM("npretrig", *npretrig);
 
     return status_success;
 }
