@@ -34,6 +34,7 @@ typedef enum {LMK04906, // LMK04906
 
 ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice);
+ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3110_adc_init_priv(struct ifcdaqdrv_dev *ifcdevice, ADC3110_SBCDEVICE device);
 

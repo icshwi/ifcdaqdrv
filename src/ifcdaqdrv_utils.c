@@ -34,11 +34,14 @@ ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int 
     // *i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
     ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
 
+    if (ret != 0)
+        printf("[tsc_csr_read()] TOSCA LIB READ returned %d\n", ret);
+
     return ret;
 }
 
 ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value){
-#if DEBUG
+#if DEBUG_N
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
         // error message
         printf(
@@ -53,9 +56,13 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
 #endif
 
     // pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), value);
-    tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
+    int ret;
+    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
 
-#if DEBUG
+    if (ret != 0)
+        printf("[tsc_csr_write()] TOSCA LIB WRITE returned %d\n", ret);
+
+#if DEBUG_N
     ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (after write)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
 #endif
@@ -79,7 +86,7 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     //ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
     tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
 
-#if DEBUG
+#if DEBUG_N
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (before setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
     LOG((7, "crate %d: CSR[0x%x:%02x] set=%08x clr=%08x\n",   ifcdevice->card, offset, register_idx, setmask, clrmask));
 #endif
@@ -90,7 +97,7 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     //pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
     tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
 
-#if DEBUG
+#if DEBUG_N
     ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
     LOG((7, "crate %d: CSR[0x%x:%02x] %08x (after setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
 #endif

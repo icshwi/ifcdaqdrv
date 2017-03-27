@@ -67,7 +67,7 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     TRACE_IOC;
 
-    ifcdevice->init_adc              = adc3110_init_adc;
+    ifcdevice->init_adc              = adc3110_init_chips;
     ifcdevice->get_signature         = adc3110_get_signature;
     ifcdevice->set_led               = adc3110_set_led;
     ifcdevice->get_gain              = adc3110_get_gain;
@@ -1270,10 +1270,10 @@ ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, 
 static ifcdaqdrv_status adc3110_dumpMainCSR(void)
 {
     // Read Main CSR
-    uint32_t ui32_mcsr;
+    int32_t i32_mcsr;
     int ret;
 
-    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + 0x1000 + (0x81 * 4), &ui32_mcsr);
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + 0x1000 + (0x81 * 4), &i32_mcsr);
     if (ret)
         return status_internal;
 
@@ -1293,75 +1293,146 @@ static ifcdaqdrv_status adc3110_dumpMainCSR(void)
     #define MMCM_LOCK_SFT     15
 
     printf("[FMC MAIN CSR] -> ");
-    printf("ADC_RESET = %d " (ui32_mcsr & ADC_RESET_MASK)>>ADC_RESET_SFT );
-    printf("ADC_SYNC = %d " (ui32_mcsr & ADC_SYNC_MASK)>>ADC_SYNC_SFT );
-    printf("ADC_01PWRD = %d " (ui32_mcsr & ADC_01PWRD_MASK)>>ADC_01PWRD_SFT );
-    printf("ADC_23PWRD = %d " (ui32_mcsr & ADC_23PWRD_MASK)>>ADC_23PWRD_SFT );
-    printf("ADC_4567PWRD = %d " (ui32_mcsr & ADC_4567PWRD_MASK)>>ADC_4567PWRD_SFT );
-    printf("MMCM_RESET = %d " (ui32_mcsr & MMCM_RST_MASK)>>MMCM_RST_SFT );
-    printf("MMCM_LOCK = %d \n" (ui32_mcsr & MMCM_LOCK_MASK)>>MMCM_LOCK_SFT );
+    // printf("ADC_RESET = %d ", (ui32_mcsr & ADC_RESET_MASK)>>ADC_RESET_SFT );
+    // printf("ADC_SYNC = %d ", (ui32_mcsr & ADC_SYNC_MASK)>>ADC_SYNC_SFT );
+    // printf("ADC_01PWRD = %d ", (ui32_mcsr & ADC_01PWRD_MASK)>>ADC_01PWRD_SFT );
+    // printf("ADC_23PWRD = %d ", (ui32_mcsr & ADC_23PWRD_MASK)>>ADC_23PWRD_SFT );
+    // printf("ADC_4567PWRD = %d ", (ui32_mcsr & ADC_4567PWRD_MASK)>>ADC_4567PWRD_SFT );
+    // printf("MMCM_RESET = %d ", (ui32_mcsr & MMCM_RST_MASK)>>MMCM_RST_SFT );
+    printf("MMCM_LOCK = %d \n", (ui32_mcsr & MMCM_LOCK_MASK)>>MMCM_LOCK_SFT );
 
     return status_success;
 }
 
-#if 0
-ifcdaqdrv_status adc3110_ADC_setStandby(uint crate, IFC_FMC_SLOT fmc, int standby, int waitForWakeupTime){
-    int                     res             = 0;
 
-    const int               STDBY_BitNr     = 5; // standby -> bit 5 register 0x08
+ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
+{
+    //int res = 0;
+    
+    TRACE_IOC;
+ 
+    // led off
+    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_blink_fast);
+    adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_blink_slow);
 
-    const ADC3110_SBCDEVICE allADCDevices[] = {ADS01, ADS23, ADS45, ADS67};
+    TRACE_INIT("Starting initialization procedure --------------------------");
 
-#if DEBUG_OUT || 1
-    printf("%s(crate=%u,fmc=%u,standby=%d,wait=%d)\n", __FUNCTION__, crate, fmc, standby, waitForWakeupTime);
-#endif
+    // Power down ADS #01 #23 #4567 
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1D00);
+    usleep(2000);
 
-    ADC3110_SBCDEVICE device;
-    uint32_t          value;
-    int               idx;
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0); // Release RESET on all ADS
+    ifc_fmc_tcsr_write(ifcdevice, 0x02, 0); // LED_MGT FP Led  power-off + oscillator 100  power-off
 
-    for (idx = 0; idx < (sizeof(allADCDevices) / sizeof(allADCDevices[0])); idx++) {
-        device = allADCDevices[idx];
+    /*
+     * Setup LMK04906
+     */
+    TRACE_INIT("Configuring LMK04906 --------------------------------------");
+  
+    // Reset device
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x00, 0x00020000);
+    usleep(2000);
+
+    //Enable the six clock outputs divided by 10
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x00, 0x00000140); // LMK04906_R00 Enable + ClkOUT0_DIV = 10  <(Test point R184))
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x01, 0x00000140); // LMK04906_R01 Enable  ClkOut_1 + ClkOUT0_DIV = 10  -> 2500/10 = 250 MHz
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x02, 0x00000140); // LMK04906_R02 Enable  ClkOut_2 + ClkOUT0_DIV = 10  
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x03, 0x00000140); // LMK04906_R02 Enable  ClkOut_3 + ClkOUT0_DIV = 10  
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x04, 0x00000140); // LMK04906_R02 Enable  ClkOut_4 + ClkOUT0_DIV = 10  
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x05, 0x00000140); // LMK04906_R05 Enable  ClkOut_5 + ClkOUT0_DIV = 10  -> 2500/10 = 250 MHz
+
+    // Set LMK04906 outputs to LVDS (This MUST be done before enabling CCHD575)
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x06, 0x01100000); // ClkOut0_Type/Clk_Out1_Type = 1 (LVDS)
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x07, 0x01100000); // ClkOut2_Type/Clk_Out3_Type = 1 (LVDS)
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x08, 0x01010000); // ClkOut4_Type/Clk_Out5_Type = 1 (LVDS)
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x09, 0x55555540); // For "Proper" operation...
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0A, 0x11404200); // LMK04906_R10 OscOUT_Type = 1 (LVDS)  Powerdown    
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0B, 0x34028000); // LMK04906_R11 Device MODE=0x6 + No SYNC
+    //adc3110_SerialBus_write(ifcdevice, LMK04906,0x0B,0x37f28000); // Device MODE=0x6 + No SYNC output
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0C, 0x13000000); // LMK04906_R12 LD pin programmable (-> PLL_2 DLD output)    
+
+    //adc3110_SerialBus_write(ifcdevice,LMK04906,0x0D, 0x3B700240); // HOLDOVER pin uWRITE SDATOUT ClkIn_SELECT_MODE = ClkIn1  Enable CLKin1 = 1
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0D, 0x3B7002c8); // HOLDOVER pin uWIRE SDATOUT  Enable CLKin1
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0E, 0x00000000); // Bipolar Mode CLKin1 INPUT
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x0F, 0x00000000); // DAC unused
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x10, 0x01550400); // OSC IN level
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x18, 0x00000000); // PLL1 not used / PLL2 used
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x19, 0x00000000); // DAC config not used
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1A, 0x8FA00000); // PLL2 used / ICP = 3200uA
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1B, 0x00000000); // PLL1 not used
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1C, 0x00200000); // PLL2_R = 2 / PLL1 N divisor=00
+    
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1D, 0x01800320); // LMK04906_R29 OSCIN_FREQ /PLL2_NCAL = 25)
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1F, 0x00000000); // LMK04906_R31 uWIRE Not LOCK
+
+    TRACE_INIT("Enable Internal 100 MHz clock from  +OSC575 -------------------------------------------");
+    ifc_fmc_tcsr_write(ifcdevice, 0x02, 0x80000003);
+    usleep(2000);
+
+    adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
+    usleep(20000);
+
+    TRACE_INIT("Configuring the ADCs -------------------------------------------------------------");
+    
+    adc3110_adc_init_priv(ifcdevice, ADS01);
+    adc3110_adc_init_priv(ifcdevice, ADS23);
+    adc3110_adc_init_priv(ifcdevice, ADS45);
+    adc3110_adc_init_priv(ifcdevice, ADS67);
+
+    // disable gain, set gain to 1 on all channels
+    int i = 0;
+    for (i = 0; i < 8; ++i) {
+        adc3110_set_gain(ifcdevice, i, 1);
+    }
+
+    // Issues with signed dataformat.
+    adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
 
 
-        // read standby control register
-        value = adc3110_SerialBus_read_unlocked(crate, fmc, device, 0x08);
+    TRACE_INIT("Checking if CLK is locked ------------------------------------------------------------ ");
 
-#if DEBUG_OUT
-        printf("%s(crate=%u,fmc=%u,standby=%d,wait=%d) device=%d read value = %08x\n", __FUNCTION__, crate, fmc,
-               standby, waitForWakeupTime, device, value);
-#endif
+    // Verification Clock has started
+    // Warning: ads42lb69 01 shall be initialized
+    const int timeout = 60; // 30ms
 
-        if (standby) {
-            // set standby
-            value |= (1 << STDBY_BitNr);
+    int       timo    = 0;
+    int32_t   value;
+
+    timo = 0;
+    while (timo < timeout) {
+        timo++;
+
+        ifc_fmc_tcsr_read(ifcdevice, 1, &value);
+
+        if (value & 0x00008000) {
+            // MMCM is locked
+            break;
         } else {
-            // clear standby
-            value &= ~(1 << STDBY_BitNr);
+            // MMCM not locked
         }
 
-#if DEBUG_OUT
-        printf("%s(crate=%u,fmc=%u,standby=%d,wait=%d) device=%d write value = %08x\n", __FUNCTION__, crate, fmc,
-               standby, waitForWakeupTime, device, value);
+        usleep(500);
+    }
+
+    /* Check if MMC is locked */
+    if (value & 0x00008000) {
+        
+        printf("Initialization DONE !!! -----------------------------------------------------------\n");
+        return status_success;
+    }
+
+    // Failed to set clock
+    // return status_internal;
+#if DEBUG
+    printf("%s(): Warning: Failed to lock clock..\n", __FUNCTION__);
 #endif
-
-        // write standby control register
-        res = adc3110_SerialBus_write(crate, fmc, device, 0x08, value);
-    }
-
-    if (!standby && waitForWakeupTime) {
-        // wakeup time from standby ~100usec
-
-        // make some register reads
-
-        // TODO ... need some fine tune ......
-
-        int n;
-        for (n = 0; n < 200; n++) {
-            adc3110_SerialBus_read_unlocked(crate, fmc, ADS01, 0x08);
-        }
-    }
-
-    return res;
+    return status_success;
 }
-#endif
+

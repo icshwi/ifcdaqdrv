@@ -52,6 +52,7 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 	#define TRACE_GET_PARAMD(par, val) printf("  [PARAM] %s = %f\n", par, val)
 	#define TRACE_GET_PARAM(par, val) printf("  [PARAM] %s = %d\n", par, val)
 
+	#define TRACE_INIT(msg) printf("[INITIALIZATION] %s\n", msg)
 
 #else
 	#define TRACE_IOC fprintf(stderr,"")
