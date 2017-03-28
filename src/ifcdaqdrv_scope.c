@@ -1074,3 +1074,28 @@ ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice)
     LOG((5, "SCOPE application configured to SMEM mode\n"));
     return status_success;
 }
+
+
+ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcdevice)
+{
+    ifcdaqdrv_status      status;
+    TRACE_IOC;
+
+    /* Set FMC 1 or 2 MODE RUN and FIFO HALT */
+    if (ifcdevice->fmc == 1)
+    {
+      status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x00000006, 0xffffffff);
+      if (status) return status;
+    }
+    else 
+    {
+      status = ifc_scope_tcsr_setclr(ifcdevice, 2, 0x00000006, 0xffffffff);
+      if (status) return status;
+    }
+
+    /* Enable GLOBAL TRIGGER */
+    ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
+
+
+  return status_success;
+}

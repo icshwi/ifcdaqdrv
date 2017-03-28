@@ -306,6 +306,9 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
 #endif
 
     // check ACQ Clock
+    ifc_fmc_tcsr_read(ifcdevice, 1, &i32_reg_val);
+    printf("FMC MMCM = %d\n", (i32_reg_val & 0x00008000)>>15);
+
     status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
     if ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_CLKERR_MASK) != 0) {
 #if DEBUG
@@ -316,10 +319,15 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     }
 
     /* Arm device */
+    printf(" ############################## Arming device ######################################### \n");
     status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 1 << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT, 0);
+
+    /* TODO: check if it's the proper way of configuring the FMC acq */
+    ifcdaqdrv_scope_prepare_softtrigger(ifcdevice);
 
     /* If software trigger is selected, try manually trigger. */
     if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft) {
+        printf(" Trying to trigger by software... \n");
         /* Estimate time to complete sample */
         double acquisition_time;
         double frequency;
@@ -359,6 +367,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
 
     ifcdevice->armed = 1;
     pthread_mutex_unlock(&ifcdevice->lock);
+    printf("Device is armed! trigger_type = %d\n", (int) ifcdevice->trigger_type); 
     return status_success;
 }
 
@@ -443,8 +452,16 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     do {
+        status = ifc_tcsr_read(ifcdevice, 0x1000, 0x79, &i32_reg_val);
+        LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", 0x79, i32_reg_val));
+        
         status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-        LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val));
+	LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val));
+        
+        status = ifc_scope_tcsr_read(ifcdevice, 1, &i32_reg_val);
+	LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n\n", 0x61, i32_reg_val));
+	
+
         usleep(ifcdevice->poll_period);
     } while (!status && ifcdevice->armed && (
                 (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT !=
@@ -760,6 +777,8 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
     uint32_t              channel_mask = 0;
     uint32_t              ptq          = 0;
 
+    TRACE_IOC;
+
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
@@ -811,6 +830,7 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
         break;
     case ifcdaqdrv_trigger_auto: // Auto is not supported anymore (will be interpreted as soft trigger)
     case ifcdaqdrv_trigger_soft:
+        printf("Configuring software trigger --------------------- \n");
         status = ifcdaqdrv_get_ptq(ifcdevice, &ptq);
         if(status) {
             return status;
@@ -857,6 +877,9 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
     ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, &i32_trig_val);
     LOG((LEVEL_INFO, "Is set trig val %08x\n", i32_trig_val));
 #endif
+
+    /* TODO: check if this is the proper way of enabling trigger */
+    //ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
 
     pthread_mutex_unlock(&ifcdevice->lock);
 
@@ -1032,6 +1055,8 @@ ifcdaqdrv_status ifcdaqdrv_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t               i32_reg_val;
 
+    TRACE_IOC;
+
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
@@ -1055,7 +1080,9 @@ ifcdaqdrv_status ifcdaqdrv_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_
                 return status_device_armed;
             }
 
-            status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, i << 2, IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK);
+	    printf("Decimation [%d] is valid, but ACQ_downSMP is forced to be zero (1:4 with avg)\n", decimation);  
+            //status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, i << 2, IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK);
+	    
             pthread_mutex_unlock(&ifcdevice->lock);
             return status;
         }
@@ -1140,6 +1167,8 @@ ifcdaqdrv_status ifcdaqdrv_set_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     if(!ifcdevice->set_nsamples) {
         return status_no_support;
     }
+
+    TRACE_IOC;
 
     pthread_mutex_lock(&ifcdevice->lock);
 
