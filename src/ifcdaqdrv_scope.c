@@ -776,6 +776,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
         break;
     }
 
+
     ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
     cs_reg = i32_reg_val & (IFC_SCOPE_TCSR_CS_ACQ_Single_MASK |
                             IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK |
@@ -911,7 +912,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     case ifcdaqdrv_acq_mode_sram:
         status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
         break;
-    case ifcdaqdrv_acq_mode_smem:
+    case ifcd:
         status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
         break;
     default:
@@ -972,10 +973,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_average(struct ifcdaqdrv_dev *ifcdevice, ui
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) {
         *average = ifcdevice->averages[(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_downSMP_SHIFT];
+        
+        TRACE_GET_PARAM("average", *average);
+
         return status;
     }
 
     *average = 1;
+    TRACE_GET_PARAM("average", *average);
     return status_success;
 }
 
@@ -1015,9 +1020,11 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, ui
 
     // If averaging is not enabled and down-sampling is not 1, decimation is being used.
     // It is invalid configuration to have averaging and decimation at the same time.
-    if(!(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) && (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK)) {
-        return status_config;
-    }
+
+    // if(!(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) && (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK)) {
+    //     printf("%s\n", );
+    //     return status_config;
+    // }
 
     for (i = 0; i < MAX_DECIMATIONS; ++i) {
         if (ifcdevice->averages[i] == average) {
@@ -1044,4 +1051,25 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, ui
         }
     }
     return status_argument_invalid;
+}
+
+ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice)
+{
+    int32_t               i32_reg_val;
+    ifcdaqdrv_status      status;
+
+    TRACE_IOC;
+
+    ifcdevice->mode = ifcdaqdrv_acq_mode_smem;
+
+    /* Set ACQ_downSMP_MOD to 1 (bit 15 = 1) */
+    status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, 1 << IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_SHIFT, 0);
+    if (status) return status;
+
+    /* Set ACQ_downSMP to 000 (1:4 with averaging) */
+    status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, 0, 0x7 << IFC_SCOPE_TCSR_CS_ACQ_downSMP_SHIFT);
+    if (status) return status;
+
+    LOG((5, "SCOPE application configured to SMEM mode\n"));
+    return status_success;
 }

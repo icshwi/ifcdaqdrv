@@ -92,9 +92,9 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->normalize_ch          = adc3110_read_ch;
     ifcdevice->normalize             = adc3110_read;
 
-    ifcdevice->mode_switch = ifcdaqdrv_scope_switch_mode;
+    ifcdevice->mode_switch = ifcdaqdrv_scope_switch_mode; // Changed default mode to SMEM
 
-    ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
+    ifcdevice->mode        = ifcdaqdrv_acq_mode_smem;
     ifcdevice->sample_size = 2;
     ifcdevice->nchannels   = 8;
 
@@ -1315,7 +1315,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_blink_fast);
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_blink_slow);
 
-    TRACE_INIT("Starting initialization procedure --------------------------");
+    TRACE_INIT("\n-----------------------------Starting initialization procedure --------------------------\n");
 
     // Power down ADS #01 #23 #4567 
     ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1D00);
@@ -1327,7 +1327,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     /*
      * Setup LMK04906
      */
-    TRACE_INIT("Configuring LMK04906 --------------------------------------");
+    TRACE_INIT("\n---------------------------------Configuring LMK04906 -----------------------------------\n");
   
     // Reset device
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x00, 0x00020000);
@@ -1372,14 +1372,14 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1F, 0x00000000); // LMK04906_R31 uWIRE Not LOCK
 
-    TRACE_INIT("Enable Internal 100 MHz clock from  +OSC575 -------------------------------------------");
+    TRACE_INIT("\n----------------------Enable Internal 100 MHz clock from  +OSC575 ------------------------\n");
     ifc_fmc_tcsr_write(ifcdevice, 0x02, 0x80000003);
     usleep(2000);
 
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
     usleep(20000);
 
-    TRACE_INIT("Configuring the ADCs -------------------------------------------------------------");
+    TRACE_INIT("\n--------------------------------Configuring the ADCs --------------------------------------\n");
     
     adc3110_adc_init_priv(ifcdevice, ADS01);
     adc3110_adc_init_priv(ifcdevice, ADS23);
@@ -1396,7 +1396,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
 
 
-    TRACE_INIT("Checking if CLK is locked ------------------------------------------------------------ ");
+    TRACE_INIT("\n-------------------------------Checking if CLK is locked -----------------------------------\n");
 
     // Verification Clock has started
     // Warning: ads42lb69 01 shall be initialized
@@ -1424,8 +1424,9 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     /* Check if MMC is locked */
     if (value & 0x00008000) {
         
-        printf("Initialization DONE !!! -----------------------------------------------------------\n");
-        return status_success;
+        printf("\n---------------------------------Initialization DONE !!! ---------------------------------\n");
+        return ifcdaqdrv_scope_init_smem_mode(ifcdevice);
+        //return status_success;
     }
 
     // Failed to set clock
