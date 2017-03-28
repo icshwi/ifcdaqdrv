@@ -1081,17 +1081,16 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
     ifcdaqdrv_status      status;
     TRACE_IOC;
 
-    /* Set FMC 1 or 2 MODE RUN and FIFO HALT */
-    if (ifcdevice->fmc == 1)
-    {
-      status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x00000006, 0xffffffff);
-      if (status) return status;
-    }
-    else 
-    {
-      status = ifc_scope_tcsr_setclr(ifcdevice, 2, 0x00000006, 0xffffffff);
-      if (status) return status;
-    }
+    if ((ifcdevice->fmc != 1) || (ifcdevice->fmc != 2)) return status_argument_range;
+
+    /* CLR aquisition to reset buffers */
+    ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x01010101); // ACQ_CLR = 1 clear data acquisition DPRAM
+    ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x00000000); // ACQ_CLR = 0
+      
+    /* Enable all channels in FIFO mode / HALT when overflow */  
+    status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x06060606, 0xffffffff);
+    if (status) return status;
+
 
     /* Enable GLOBAL TRIGGER */
     ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
