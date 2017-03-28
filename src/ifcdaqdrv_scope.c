@@ -486,6 +486,8 @@ ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq
     TRACE_IOC;
     TRACE_PARAM("set pt quota", ptq);
 
+    /* TODO: check if quota 0 is valid */
+    if (ptq == 0) ptq = 1;
 
     return ifc_xuser_tcsr_setclr(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice), ptq << 5,
                                  IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
@@ -511,6 +513,9 @@ ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *pt
     TRACE_IOC;
 
     *ptq = ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK) >> 5);
+
+    /* Fix this */
+    if (*ptq == 1) *ptq = 0;
 
     TRACE_GET_PARAM("ptq", *ptq);
 
@@ -1110,8 +1115,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
     // Clear SCOPE trigger
     ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0);
 
-    ifcdevice->mode = mode;
-
     /* Clear general control register and enable specific acquisition mode.. */
     if (ifcdevice->fmc == 1) {
         ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
@@ -1126,9 +1129,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
     ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
     ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
 
-
-
-    int32_t i32_reg_val;
     ifc_scope_tcsr_read(ifcdevice, ifcdevice->fmc, &i32_reg_val);
     printf("################  ENABLING GLOBAL TRIGGER ####################\n");
     printf("Register 0x%02x = 0x%08x \n", ifcdevice->fmc + 0x60, i32_reg_val) ;
