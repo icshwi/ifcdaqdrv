@@ -1080,16 +1080,53 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
 {
     ifcdaqdrv_status      status;
     TRACE_IOC;
+    int32_t i32_reg_val;
+    int32_t cs_reg;
+    int32_t trig_reg;
 
-    if ((ifcdevice->fmc != 1) || (ifcdevice->fmc != 2)) return status_argument_range;
 
-    /* CLR aquisition to reset buffers */
-    ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x01010101); // ACQ_CLR = 1 clear data acquisition DPRAM
-    ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x00000000); // ACQ_CLR = 0
+    // if ((ifcdevice->fmc != 1) || (ifcdevice->fmc != 2)) return status_argument_range;
+
+    // /* CLR aquisition to reset buffers */
+    // ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x01010101); // ACQ_CLR = 1 clear data acquisition DPRAM
+    // ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x00000000); // ACQ_CLR = 0
       
-    /* Enable all channels in FIFO mode / HALT when overflow */  
-    status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x06060606, 0xffffffff);
-    if (status) return status;
+    // /* Enable all channels in FIFO mode / HALT when overflow */  
+    // status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x06060606, 0xffffffff);
+    // if (status) return status;
+
+
+
+    ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
+    cs_reg = i32_reg_val & (IFC_SCOPE_TCSR_CS_ACQ_Single_MASK |
+                            IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK |
+                            IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK |
+                            IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
+    ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, &i32_reg_val);
+    trig_reg = i32_reg_val;
+
+    // Clear SCOPE app
+    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 0);
+    // Clear SCOPE trigger
+    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0);
+
+    ifcdevice->mode = mode;
+
+    /* Clear general control register and enable specific acquisition mode.. */
+    if (ifcdevice->fmc == 1) {
+        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
+                                                                            IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
+                                       IFC_SCOPE_DTACQ_TCSR_GC_FMC1_ACQRUN_SHIFT, 0xffffffff);
+    } else { /* fmc is FMC2 */
+        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
+                                                                            IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
+                                       IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT, 0xffffffff);
+    }
+
+    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
+    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
+
+
 
     int32_t i32_reg_val;
     ifc_scope_tcsr_read(ifcdevice, ifcdevice->fmc, &i32_reg_val);
