@@ -1091,7 +1091,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
     status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x06060606, 0xffffffff);
     if (status) return status;
 
-
+    int32_t i32_reg_val;
+    ifc_scope_tcsr_read(ifcdevice, ifcdevice->fmc, &i32_reg_val);
+    printf("################  ENABLING GLOBAL TRIGGER ####################\n");
+    printf("Register 0x%02x = 0x%08x \n", ifcdevice->fmc + 0x60, i32_reg_val) ;
     /* Enable GLOBAL TRIGGER */
     ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
 
