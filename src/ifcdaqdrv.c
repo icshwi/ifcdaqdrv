@@ -965,6 +965,7 @@ ifcdaqdrv_status ifcdaqdrv_set_average(struct ifcdaqdrv_usr *ifcuser, uint32_t a
 
     status = ifcdaqdrv_scope_set_average(ifcdevice, average);
     pthread_mutex_unlock(&ifcdevice->lock);
+    TRACE_GET_PARAM("scope_set_average status", status);
     return status;
 }
 

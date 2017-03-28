@@ -866,9 +866,11 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
     }
 #endif
 
-    ifcdaqdrv_scope_get_average(ifcdevice, &average);
+    status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
+    if (status) printf("ifcdaqdrv_scope_get_average returned %d\n", status);
 
     if(ifcdevice->nchannels == 8 && average < 4) {
+        printf("Can't set average < 4 in SMEM mode\n");
         return status_config;
     }
 
@@ -912,7 +914,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     case ifcdaqdrv_acq_mode_sram:
         status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
         break;
-    case ifcd:
+    case ifcdaqdrv_acq_mode_smem:
         status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
         break;
     default:
@@ -1055,7 +1057,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, ui
 
 ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice)
 {
-    int32_t               i32_reg_val;
     ifcdaqdrv_status      status;
 
     TRACE_IOC;
