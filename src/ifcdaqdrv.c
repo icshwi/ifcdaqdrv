@@ -323,7 +323,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 1 << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT, 0);
 
     /* TODO: check if it's the proper way of configuring the FMC acq */
-    ifcdaqdrv_scope_prepare_softtrigger(ifcdevice);
+    //ifcdaqdrv_scope_prepare_softtrigger(ifcdevice);
 
     /* If software trigger is selected, try manually trigger. */
     if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft) {
@@ -426,6 +426,8 @@ ifcdaqdrv_status ifcdaqdrv_disarm_device(struct ifcdaqdrv_usr *ifcuser){
 
 disarm_success:
 
+    printf("####################### BOARD DISARMED ############################\n");
+
     ifcdevice->armed = 0;
 
     pthread_mutex_unlock(&ifcdevice->lock);
@@ -445,22 +447,27 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
 
     ifcdevice = ifcuser->device;
 
+    static int count;
+
     TRACE_IOC;
 
     if (!ifcdevice) {
         return status_no_device;
     }
+    
+    count = 10;
 
     do {
-        status = ifc_tcsr_read(ifcdevice, 0x1000, 0x79, &i32_reg_val);
-        LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", 0x79, i32_reg_val));
+        //status = ifc_tcsr_read(ifcdevice, 0x1000, 0x79, &i32_reg_val);
+        //LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", 0x79, i32_reg_val));
         
         status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
 	LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val));
         
-        status = ifc_scope_tcsr_read(ifcdevice, 1, &i32_reg_val);
-	LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n\n", 0x61, i32_reg_val));
+        //status = ifc_scope_tcsr_read(ifcdevice, 1, &i32_reg_val);
+	//LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n\n", 0x61, i32_reg_val));
 	
+	count--;
 
         usleep(ifcdevice->poll_period);
     } while (!status && ifcdevice->armed && (

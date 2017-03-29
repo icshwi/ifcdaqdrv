@@ -19,8 +19,8 @@
 
 static const uint32_t decimations[] = {1, 2, 5, 10, 20, 50, 100, 200, 0};
 
-//static const uint32_t averages[] = {1, 4, 8, 16, 32, 64, 128, 256, 0};
-static const uint32_t averages[] = {4, 8, 16, 32, 64, 128, 256, 512, 0}; // TODO: use different vectors for SRAM SMEM
+static const uint32_t averages[] = {1, 4, 8, 16, 32, 64, 128, 256, 0};
+//static const uint32_t averages[] = {4, 8, 16, 32, 64, 128, 256, 512, 0}; // TODO: use different vectors for SRAM SMEM
 static const double   valid_clocks[] = {2400e6, 2500e6, 0};
 
 static int adc3110_SerialBus_isReady(struct ifcdaqdrv_dev *ifcdevice);
@@ -96,7 +96,7 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->mode_switch = ifcdaqdrv_scope_switch_mode; // Changed default mode to SMEM
 
-    ifcdevice->mode        = ifcdaqdrv_acq_mode_smem;
+    ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
     ifcdevice->sample_size = 2;
     ifcdevice->nchannels   = 8;
 

@@ -322,6 +322,8 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     int status;
     uint32_t valid_dma_status;
 
+    /* Assuming that we are using channel ZERO */
+
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = src_mode;
@@ -331,27 +333,61 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.des_mode  = des_mode;
 
     dma_req.size       = size;
-
+    
+#ifdef PEV_MOV_MODE
     dma_req.start_mode = DMA_START_PIPE;
-    // dma_req.start_mode = DMA_MODE_BLOCK;
-    // dma_req.end_mode   = 0;
-
     dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
 
-    // dma_req.intr_mode = 0;
-    // dma_req.wait_mode = DMA_WAIT_1S | (5<<4);
-    // dma_req.dma_status = 0;
+#else // TSC_MOV_MODE
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = DMA_START_CHAN(0);
+    dma_req.intr_mode  = 0;
+    dma_req.wait_mode  = 0;
+#endif
+
+#if DEBUG
+    /* Dumping dma_req */
+    printf("[tsc_ioctl_dma_req] src_addr =  0x%" PRIx64 "\n", dma_req.src_addr);
+    printf("[tsc_ioctl_dma_req] src_space = %d \n", dma_req.src_space);
+    printf("[tsc_ioctl_dma_req] src_mode =  %d \n", dma_req.src_mode);
+
+    printf("[tsc_ioctl_dma_req] des_addr =  0x%" PRIx64 "\n", dma_req.des_addr);
+    printf("[tsc_ioctl_dma_req] des_space = %d \n", dma_req.des_space);
+    printf("[tsc_ioctl_dma_req] des_mode =  %d \n", dma_req.des_mode);
+
+    printf("[tsc_ioctl_dma_req] size =  %d \n", (uint) dma_req.size);
+    printf("[tsc_ioctl_dma_req] size = 0x%08x \n", dma_req.size);
+
+    printf("[tsc_ioctl_dma_req] start_mode =  %d \n", dma_req.start_mode);
+    printf("[tsc_ioctl_dma_req] intr_mode =  %d \n", dma_req.intr_mode);
+    printf("[tsc_ioctl_dma_req] wait_mode =  %d \n", dma_req.wait_mode);
+
+#endif
+
+    status = tsc_dma_alloc(0);
+    if (status) 
+    {
+      LOG((4, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+      return status;
+    }
 
     // status = pevx_dma_move(ifcdevice->card, &dma_req);
     status = tsc_dma_move(&dma_req);
 
     if (status != 0) {
 #if DEBUG
-        LOG((4, "%s() pevx_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        LOG((4, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
 #endif
         return status_read;
     }
+
+
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
+    tsc_dma_wait(&dma_req);
+
+    if (dma_req.dma_status & DMA_STATUS_TMO) printf("TSC DMA TIMEOUT!!! \n");
+    if (dma_req.dma_status & DMA_STATUS_ERR) printf("TSC DMA ERROR!!! \n");
 
     // * 0x2 << 28 is the interrupt number.
     // * The board can only read from the shared memory. If we are not reading
@@ -366,8 +402,21 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 #if DEBUG
         LOG((4, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));
 #endif
-        return status_read;
+        
+	tsc_dma_free(0);
+
+	return status_read;
     }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(0);
+    if (status) 
+    {
+      LOG((4, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status;
+    }
+
+
     return  status_success;
 }
 
@@ -403,11 +452,11 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 
     /* workaround */
 #ifndef DMA_SPACE_USR1
-    #define DMA_SPACE_USR1 DMA_SPACE_USR
+    #define DMA_SPACE_USR1 0x04
 #endif
 
 #ifndef DMA_SPACE_USR2
-    #define DMA_SPACE_USR2 DMA_SPACE_USR
+    #define DMA_SPACE_USR2 0x05
 #endif
 
 
@@ -490,6 +539,16 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 
         // dma_buf is already dma_addr_t
         // src_addr sholud be casted
+
+#if DEBUG
+	printf(" [smem_read] dma_buf->size = %"PRIu32" \n", dma_buf->size);
+	printf(" [smem_read] dma_buf->size = 0x%08x \n", dma_buf->size);
+	printf(" [smem_read] curr_size = %"PRIu32" \n", current_size);
+	printf(" [smem_read] curr_size = 0x%08x \n", current_size);
+	printf(" [smem_read] size = %"PRIu32" \n", size);
+	printf(" [smem_read] size = 0x%08x \n", size);
+#endif
+
 
         status = ifcdaqdrv_dma_read_unlocked(
 					     ifcdevice,

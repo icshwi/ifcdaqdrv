@@ -855,7 +855,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
     TRACE_PARAM("set nsamples", nsamples);
 
     /* ******************* Avoid using SRAM mode ****************************/
-#if 0
+#if 1
     // If samples fit in sram use sram.
     if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) {
 
@@ -1133,7 +1133,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
     printf("################  ENABLING GLOBAL TRIGGER ####################\n");
     printf("Register 0x%02x = 0x%08x \n", ifcdevice->fmc + 0x60, i32_reg_val) ;
     /* Enable GLOBAL TRIGGER */
-    ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
+    //ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
 
 
   return status_success;
