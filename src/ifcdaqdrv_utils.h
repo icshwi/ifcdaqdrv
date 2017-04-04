@@ -118,7 +118,8 @@ struct ifcdaqdrv_dev {
 
     struct tsc_ioctl_kbuf_req    *sram_dma_buf;                /**< Buffer for SRAM DMA transfers */
     struct tsc_ioctl_kbuf_req    *smem_dma_buf;                /**< Buffer for SMEM DMA transfers */
-    void                    *all_ch_buf;                  /**< Buffer to store raw SMEM data */
+    void                    *all_ch_buf;                  		/**< Buffer to store raw SMEM data */
+    void 					*sram_blk_buf;					/* Buffer to store raw SRAM data */
 
     uint32_t                 sample_size;                  /**< Sample size in bytes, TODO: Function pointer instead? */
     uint32_t                 nchannels;                    /**< Number of channels */

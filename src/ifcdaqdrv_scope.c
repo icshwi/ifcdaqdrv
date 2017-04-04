@@ -22,6 +22,9 @@
 // #include "ifcdaqdrv_adc3112.h"
 //typedef long dma_addr_t;
 
+void manualswap(uint16_t *buffer, int nsamples);
+
+
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
 #ifdef ENABLE_I2C
     char *p;
@@ -487,7 +490,7 @@ ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq
     TRACE_PARAM("set pt quota", ptq);
 
     /* TODO: check if quota 0 is valid */
-    if (ptq == 0) ptq = 1;
+    //if (ptq == 0) ptq = 1;
 
     return ifc_xuser_tcsr_setclr(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice), ptq << 5,
                                  IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
@@ -515,7 +518,7 @@ ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *pt
     *ptq = ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK) >> 5);
 
     /* Fix this */
-    if (*ptq == 1) *ptq = 0;
+    //if (*ptq == 1) *ptq = 0;
 
     TRACE_GET_PARAM("ptq", *ptq);
 
@@ -614,9 +617,11 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
 ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *data) {
     ifcdaqdrv_status  status;
     int32_t           offset;
-    int32_t          *origin;
+    int16_t          *origin;
     int32_t          *res;
     uint32_t          last_address,  nsamples,  npretrig,  ptq;
+
+    struct tsc_ioctl_rdwr tsc_read_s;
 
     TRACE_IOC;
 
@@ -628,6 +633,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     npretrig = 0;
     ptq = 0;
 
+
+
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
         offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
@@ -637,11 +644,28 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             return status;
         }
 
-        status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+        // status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+        // if (status) {
+        //     return status;
+        // }
+
+        /* Transfer data to sram_blk_buf */
+        tsc_read_s.m.ads = ((0x44 & 0xf0) | ( 1 & 0x0f));
+        tsc_read_s.m.space = RDWR_SPACE_USR1;
+        tsc_read_s.m.swap = RDWR_SWAP_DS;
+        tsc_read_s.m.am = 0x0;
+    
+        status = tsc_read_blk((ulong)offset, (char*) ifcdevice->sram_blk_buf, nsamples * ifcdevice->sample_size, tsc_read_s.mode);
         if (status) {
+            printf("[TOSCA ERRROR ] tsc_blk_read() returned %d\n", status);
             return status;
         }
 
+#ifdef DEBUG
+        int32_t ui32_auxreg;
+        ifc_scope_acq_tcsr_read(ifcdevice, 0, &ui32_auxreg);
+        printf("[TOSCA CSR 0x70] = 0x%08x\n", ui32_auxreg);
+#endif
         status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
         if (status) {
             return status;
@@ -653,9 +677,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         }
 
         /* TODO: check the usage of dma_buf for TOSCA user library */
-        origin   = ifcdevice->sram_dma_buf->u_base;
+        //origin   = ifcdevice->sram_dma_buf->u_base;
+
+        manualswap((uint16_t*) ifcdevice->sram_blk_buf,nsamples);
+
+        origin = (int16_t*) ifcdevice->sram_blk_buf;
         npretrig = (nsamples * ptq) / 8;
         break;
+    
+
+
+
     case ifcdaqdrv_acq_mode_smem:
 #if 0
         status = ifcdevice->get_smem_base_address(ifcdevice, &offset);
@@ -691,12 +723,12 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     }
 
 #if DEBUG
-    int32_t *itr;
+    int16_t *itr;
     printf("%s(): u_base %p, acq_size %db, nsamples %d, npretrig %d, la %d, ptq %d, origin %p\n", __FUNCTION__,
             ifcdevice->sram_dma_buf->u_base, nsamples * ifcdevice->sample_size, nsamples, npretrig, last_address, ptq,
             origin);
 
-    printf("0x%08x: ", (int32_t) origin);
+    printf("0x%08x: ", (int16_t) origin);
     for (itr = origin; itr < origin + 16; ++itr) {
         printf("%08x ", *itr);
     }
@@ -1137,4 +1169,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcde
 
 
   return status_success;
+}
+
+void manualswap(uint16_t *buffer, int nsamples)
+{
+    uint16_t aux;
+    int i;
+
+    for (i = 0; i < nsamples; i++)
+    {
+        aux = (buffer[i] & 0xff00) >> 8;
+        buffer[i] = ((buffer[i] & 0x00ff) << 8) | aux;
+
+    }
 }

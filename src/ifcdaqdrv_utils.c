@@ -216,10 +216,12 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_sram_buf;
     }
 
+#if 0
     LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
         goto err_mmap_sram;
     }
+#endif
 
     //ifcdevice->smem_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -241,41 +243,50 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
+#if 0
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
         goto err_mmap_smem;
     }
-  
+#endif
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
     if(!ifcdevice->all_ch_buf){
-        goto err_mmap_smem;
+        goto err_smem_user_buf;
     }
 
-#ifdef DEBUG
-    uint64_t tp_sram;
-    uint64_t tp_smem;
-    tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
-    tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
+    printf("Trying to allocate 1 MiB in userspace for temporary SRAM data\n");
+    ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
+    if(!ifcdevice->sram_blk_buf){
+        goto err_mmap_sram;
+    }
 
-    /* PRIx64 macro is from inttypes.h */
-    printf("*****************************************************************\n");
-    printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
-    printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
-    printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
-    printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
-    printf("-----------------------------------------------------------------\n");
-    printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
-    printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
-    printf("smem_dma_buf->u_base = 0x%p \n", (void *) ifcdevice->smem_dma_buf->u_base);
-    printf("*****************************************************************\n");
+
+#ifdef DEBUG
+    // uint64_t tp_sram;
+    // uint64_t tp_smem;
+    // tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
+    // tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
+
+    // /* PRIx64 macro is from inttypes.h */
+    // printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
+    // printf("########################################################################\n");
+    // printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
+    // printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
+    // printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
+    // printf("########################################################################\n");
+    // printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
+    // printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
+    // printf("smem_dma_buf->u_base = 0x%" PRIXPTR"\n", (uintptr_t) ifcdevice->smem_dma_buf->u_base);
+    // printf("########################################################################\n");
 #endif
 
     return status_success;
 
-err_mmap_smem:
-    tsc_kbuf_munmap(ifcdevice->smem_dma_buf); 
+ err_mmap_sram:
+//     tsc_kbuf_munmap(ifcdevice->smem_dma_buf); 
+    free(ifcdevice->all_ch_buf);
 
 err_smem_user_buf:
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
@@ -288,14 +299,15 @@ err_smem_ctl:
     //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->sram_dma_buf);
 
-err_mmap_sram:
-    tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
+// err_mmap_sram:
+//     tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
 
 err_sram_buf:
     free(ifcdevice->sram_dma_buf);
 
 err_sram_ctl:
     return status_internal;
+
 }
 
 /**
@@ -322,8 +334,12 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     int status;
     uint32_t valid_dma_status;
 
+    struct tsc_ioctl_dma_sts dma_sts;
+
     /* Assuming that we are using channel ZERO */
 
+    
+#ifdef PEV_MOV_MODE
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = src_mode;
@@ -333,20 +349,29 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.des_mode  = des_mode;
 
     dma_req.size       = size;
-    
-#ifdef PEV_MOV_MODE
+
     dma_req.start_mode = DMA_START_PIPE;
     dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
 
-#else // TSC_MOV_MODE
+#else // TSC_MOV_MODE forcing the space size mask 
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = 0;
+
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space | DMA_SPACE_DS;
+    dma_req.des_mode  = 0;
+
+    dma_req.size       = size;
+
     dma_req.end_mode   = 0;
     dma_req.start_mode = DMA_START_CHAN(0);
-    dma_req.intr_mode  = 0;
+    dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = 0;
 #endif
 
-#if DEBUG
+#if 0
     /* Dumping dma_req */
     printf("[tsc_ioctl_dma_req] src_addr =  0x%" PRIx64 "\n", dma_req.src_addr);
     printf("[tsc_ioctl_dma_req] src_space = %d \n", dma_req.src_space);
@@ -365,6 +390,8 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 
 #endif
 
+
+
     status = tsc_dma_alloc(0);
     if (status) 
     {
@@ -372,6 +399,22 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
       return status;
     }
 
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    /* Print DMA status */
+    printf("###### DMA0 CSR registers after alloc #######\n");
+    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
+    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
+    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
+    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
+    printf("###### ############ #######\n");
+    
     // status = pevx_dma_move(ifcdevice->card, &dma_req);
     status = tsc_dma_move(&dma_req);
 
@@ -382,9 +425,44 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
         return status_read;
     }
 
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    /* Print DMA status */
+    printf("###### DMA0 CSR registers after DMA MOVE #######\n");
+    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
+    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
+    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
+    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
+    printf("###### ############ #######\n");
+
 
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
-    tsc_dma_wait(&dma_req);
+    status = tsc_dma_wait(&dma_req);
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    /* Print DMA status */
+    printf("###### DMA0 CSR registers after DMA WAIT #######\n");
+    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
+    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
+    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
+    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
+    printf("###### ############ #######\n");
+
+
+    if (status) printf("tsc_dma_wait() returned %d\n", status);
 
     if (dma_req.dma_status & DMA_STATUS_TMO) printf("TSC DMA TIMEOUT!!! \n");
     if (dma_req.dma_status & DMA_STATUS_ERR) printf("TSC DMA ERROR!!! \n");
@@ -463,13 +541,14 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
     // dma_buf->u_base is already dma_addr_t, no need to cast to ulong
     // "offset" will be casted 
 
+    /*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
     status = ifcdaqdrv_dma_read_unlocked(
 					 ifcdevice,
 					 (dma_addr_t) offset, 
 					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
 					 DMA_PCIE_RR2,
 					 dma_buf->b_base, 
-					 DMA_SPACE_PCIE | swap_mask(ifcdevice), 
+					 DMA_SPACE_PCIE, 
 					 DMA_PCIE_RR2,
 					 size | DMA_SIZE_PKT_1K);
 
@@ -549,14 +628,14 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 	printf(" [smem_read] size = 0x%08x \n", size);
 #endif
 
-
+	/*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
         status = ifcdaqdrv_dma_read_unlocked(
 					     ifcdevice,
 					     (dma_addr_t) src_addr, 
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
 					     dma_buf->b_base, 
-					     DMA_SPACE_PCIE | swap_mask(ifcdevice), 
+					     DMA_SPACE_PCIE, 
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
 					     );

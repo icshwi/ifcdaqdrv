@@ -1225,6 +1225,10 @@ ifcdaqdrv_status adc3110_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t chann
 
     for (itr = origin; itr < origin + nelm; ++target, ++itr) {
         *target = (int16_t)(*itr - 32768);
+        //*target = (int32_t)(*itr);
+        //*target = (*target - 32768);
+
+
     }
 
     return status_success;
