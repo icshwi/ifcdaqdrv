@@ -40,30 +40,6 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #define DEBUG 1
 #endif /* NDEBUG */
 
-
-#define ENABLE_TRACE_IOC
-#define NENABLE_TRACE_SERIAL
-
-#ifdef ENABLE_TRACE_IOC
-	#define TRACE_IOC fprintf(stderr,"[TRACE] Program has enter %s\n",__func__)
-	#define TRACE_PARAMD(par, val) printf("  [SET PARAM] %s = %f\n", par, val)
-	#define TRACE_PARAM(par, val) printf("  [SET PARAM] %s = %d\n", par, val)
-
-	#define TRACE_GET_PARAMD(par, val) printf("  [PARAM] %s = %f\n", par, val)
-	#define TRACE_GET_PARAM(par, val) printf("  [PARAM] %s = %d\n", par, val)
-
-	#define TRACE_INIT(msg) printf("[INITIALIZATION] %s\n", msg)
-
-#else
-	#define TRACE_IOC fprintf(stderr,"")
-	#define TRACE_PARAMD(par, val) printf("")
-	#define TRACE_PARAM(par, val) printf("")
-	#define TRACE_GET_PARAMD(par, val) printf("")
-	#define TRACE_GET_PARAM(par, val) printf("")
-
-#endif
-
-
 #define LOG(x)    do { LOG_ARGS x; } while (0)
 
 #define LOG_ARGS(level, fmt, args...) \
