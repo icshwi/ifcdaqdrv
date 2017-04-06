@@ -364,6 +364,10 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
             return status_internal;
         }
     }
+    else
+    {
+        printf("#################### WAITING TRIGGER FROM FRONT PANEL ########################\n");
+    }
 
     ifcdevice->armed = 1;
     pthread_mutex_unlock(&ifcdevice->lock);
@@ -447,29 +451,18 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
 
     ifcdevice = ifcuser->device;
 
-    static int count;
-
     TRACE_IOC;
 
     if (!ifcdevice) {
         return status_no_device;
     }
     
-    count = 10;
-
     do {
-        //status = ifc_tcsr_read(ifcdevice, 0x1000, 0x79, &i32_reg_val);
-        //LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", 0x79, i32_reg_val));
         
         status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-	LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val));
-        
-        //status = ifc_scope_tcsr_read(ifcdevice, 1, &i32_reg_val);
-	//LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n\n", 0x61, i32_reg_val));
-	
-	count--;
-
+	    LOG((LEVEL_DEBUG, "TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val));
         usleep(ifcdevice->poll_period);
+    
     } while (!status && ifcdevice->armed && (
                 (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT !=
                   IFC_SCOPE_TCSR_CS_ACQ_Status_VAL_DONE));
@@ -569,6 +562,10 @@ ifcdaqdrv_status ifcdaqdrv_set_clock_source(struct ifcdaqdrv_usr *ifcuser, ifcda
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_device_armed;
     }
+
+    /* Prevent from using external clock */
+    if (clock == ifcdaqdrv_clock_external)
+        clock = ifcdaqdrv_clock_internal;
 
     status = ifcdevice->set_clock_source(ifcdevice, clock);
 
