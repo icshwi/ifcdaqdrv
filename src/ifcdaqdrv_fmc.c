@@ -39,8 +39,11 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
 
 #ifdef ENABLE_I2C    
     /* TODO: this might be incompatible */
-    status = tsc_i2c_read(device, tsc_swap_16(address), &reg_val);
+    if ((device & 0x30000) == 0x10000) address = tsc_swap_16(address);
+    //status = tsc_i2c_read(device, tsc_swap_16(address), &reg_val);
+    status = tsc_i2c_read(device, address, &reg_val);
     if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
+        printf("I2C did not reply the ack\n");
         return status_i2c_nack;
     }
 #else

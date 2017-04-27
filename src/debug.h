@@ -39,27 +39,37 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #else
 #define DEBUG 1
 #endif /* NDEBUG */
+ // #define DEBUG 1
 
 
 #define ENABLE_TRACE_IOC
 #define NENABLE_TRACE_SERIAL
 
+// #define ENABLE_I2C
+
+#define I2C_CTL_EXEC_IDLE 0x00000000
+#define I2C_CTL_EXEC_RUN  0x00100000
+#define I2C_CTL_EXEC_DONE 0x00200000
+#define I2C_CTL_EXEC_ERR  0x00300000
+#define I2C_CTL_EXEC_MASK 0x00300000
+
 #ifdef ENABLE_TRACE_IOC
 	#define TRACE_IOC fprintf(stderr,"[TRACE] Program has enter %s\n",__func__)
-	#define TRACE_PARAMD(par, val) printf("  [SET PARAM] %s = %f\n", par, val)
-	#define TRACE_PARAM(par, val) printf("  [SET PARAM] %s = %d\n", par, val)
+	// #define TRACE_PARAMD(par, val) printf("  [SET PARAM] %s = %f\n", par, val)
+	// #define TRACE_PARAM(par, val) printf("  [SET PARAM] %s = %d\n", par, val)
 
-	#define TRACE_GET_PARAMD(par, val) printf("  [PARAM] %s = %f\n", par, val)
-	#define TRACE_GET_PARAM(par, val) printf("  [PARAM] %s = %d\n", par, val)
+	// #define TRACE_GET_PARAMD(par, val) printf("  [PARAM] %s = %f\n", par, val)
+	// #define TRACE_GET_PARAM(par, val) printf("  [PARAM] %s = %d\n", par, val)
 
 	#define TRACE_INIT(msg) printf("[INITIALIZATION] %s\n", msg)
 
 #else
+	#define TRACE_INIT(msg) fprintf(stderr,"")
 	#define TRACE_IOC fprintf(stderr,"")
-	#define TRACE_PARAMD(par, val) printf("")
-	#define TRACE_PARAM(par, val) printf("")
-	#define TRACE_GET_PARAMD(par, val) printf("")
-	#define TRACE_GET_PARAM(par, val) printf("")
+	// #define TRACE_PARAMD(par, val) printf("")
+	// #define TRACE_PARAM(par, val) printf("")
+	// #define TRACE_GET_PARAMD(par, val) printf("")
+	// #define TRACE_GET_PARAM(par, val) printf("")
 
 #endif
 

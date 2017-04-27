@@ -225,6 +225,8 @@ ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
 // int ifcdaqdrv_get_sram_pretrig_size(struct ifcdaqdrv_dev *ifcdevice, int *size);
 ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
 ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
+
+
 #endif // _IFC1210SCOPEDRV_UTILS_H_
 
 

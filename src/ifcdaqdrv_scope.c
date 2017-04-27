@@ -31,26 +31,26 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
     p = ifcdevice->fru_id->product_name;
     if (p) {
         if (strcmp(p, "ACQ420FMC") == 0) {
-            LOG((5, "Identified ACQ420FMC\n"));
-            acq420_register(ifcdevice);
+            LOG((5, "No support for ACQ420FMC yet!\n"));
+            return status_incompatible;
         } else if (strcmp(p, "ADC3110") == 0) {
             LOG((5, "Identified ADC3110\n"));
             adc3110_register(ifcdevice);
         } else if (strcmp(p, "ADC3111") == 0) {
             LOG((5, "Identified ADC3111\n"));
-            adc3111_register(ifcdevice);
+            //adc3111_register(ifcdevice);
+
+            /* TODO: Signature is ADC3111 but board is ADC3110 */
+            adc3110_register(ifcdevice);
         } else if (strcmp(p, "ADC3112") == 0) {
             LOG((5, "No support for ADC3112 yet\n"));
+            return status_incompatible;
         } else {
             LOG((5, "No recognized device %s\n", p));
             return status_incompatible;
         }
 
-        if (strcmp(p, "ADC3110") == 0) {
-            LOG((5, "Identified ADC3110\n"));
-            adc3110_register(ifcdevice);
-        }
-
+ 
     } else {
         LOG((4, "Internal error, no product_name\n"));
         return status_internal;
@@ -65,9 +65,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcdaqdrv_scope_set_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned nsamples){
     int32_t i32_reg_val = 0;
-
-    TRACE_IOC;
-    TRACE_PARAM("sram_nsamples", nsamples);
 
     switch (nsamples) {
     case 32 * 1024:
@@ -98,8 +95,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_sram_nsamples(struct ifcdaqdrv_dev *ifcdevi
 ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned *nsamples){
     int32_t i32_reg_val;
     
-    TRACE_IOC;
-
     int     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     switch ((i32_reg_val & IFC_SCOPE_TCSR_CS_SRAM_ACQ_Size_MASK) >> 12) {
     case 0:
@@ -124,7 +119,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevi
         return status_internal;
     }
     LOG((7, "acq %d, reg_val %08x\n", *nsamples, i32_reg_val));
-    TRACE_GET_PARAM("sram_nsamples", *nsamples);
 
     return status;
 }
@@ -138,8 +132,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     ifcdaqdrv_status status;
     uint32_t acq_size;
     uint32_t average;
-
-    TRACE_IOC;
 
     if(!ifcdevice->nchannels || !ifcdevice->sample_size) {
         return status_internal;
@@ -161,8 +153,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
 
     *nsamples = acq_size / ifcdevice->nchannels / ifcdevice->sample_size;
 
-    TRACE_PARAM("smem_nsamples", *nsamples);
-
     return status;
 }
 
@@ -178,10 +168,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     uint32_t average;
     ifcdaqdrv_status status;
     uint32_t nchannels;
-
-    TRACE_IOC;
-    TRACE_PARAM("set smem nsamples", nsamples);
-
 
     status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
 
@@ -446,8 +432,6 @@ ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     int32_t i32_reg_val;
     int     status;
 
-    TRACE_IOC;
-
     status = ifc_xuser_tcsr_read(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice) + 2, &i32_reg_val);
 
     if (ifcdevice->sample_size == 4) {
@@ -456,8 +440,6 @@ ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
         *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SRAMx_LA_Last_Address_MASK) >> 1;
     }
 
-    TRACE_GET_PARAM("sram last addr", *last_address);
-
     return status;
 }
 
@@ -465,13 +447,9 @@ ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     int32_t i32_reg_val;
     int     status;
 
-    TRACE_IOC;
-
     status = ifc_xuser_tcsr_read(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice) + 2, &i32_reg_val);
 
     *last_address = (i32_reg_val & IFC_SCOPE_TCSR_SMEMx_LA_Last_Address_MASK) >> 4;
-
-    TRACE_GET_PARAM("smem last addr", *last_address);
 
     return status;
 }
@@ -486,12 +464,7 @@ ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq
         return status_argument_range;
     }
 
-    TRACE_IOC;
-    TRACE_PARAM("set pt quota", ptq);
-
     /* TODO: check if quota 0 is valid */
-    //if (ptq == 0) ptq = 1;
-
     return ifc_xuser_tcsr_setclr(ifcdevice, ifc_get_scope_tcsr_offset(ifcdevice), ptq << 5,
                                  IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
 }
@@ -513,14 +486,7 @@ ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *pt
         return status_argument_invalid;
     }
 
-    TRACE_IOC;
-
     *ptq = ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK) >> 5);
-
-    /* Fix this */
-    //if (*ptq == 1) *ptq = 0;
-
-    TRACE_GET_PARAM("ptq", *ptq);
 
     return status;
 }
@@ -532,8 +498,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
     int32_t              *res          = data;
     uint32_t              last_address = 0, nsamples = 0, npretrig = 0, ptq = 0;
     uint32_t channel;
-
-    TRACE_IOC;
 
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
@@ -591,7 +555,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         if (status) {
             return status;
         }
-#if DEBUG
+#if 0
         int32_t *itr;
         printf("%s(): u_base %p, acq_size %db, nsamples %d, npretrig %d, la %d, ptq %d, origin %p\n", __FUNCTION__,
                 ifcdevice->smem_dma_buf->u_base, nsamples * ifcdevice->sample_size, nsamples, npretrig, last_address, ptq,
@@ -623,8 +587,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
 
     struct tsc_ioctl_rdwr tsc_read_s;
 
-    TRACE_IOC;
-
     offset = 0;
     origin = NULL;
     res = data;
@@ -650,22 +612,23 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         // }
 
         /* Transfer data to sram_blk_buf */
-        tsc_read_s.m.ads = ((0x44 & 0xf0) | ( 1 & 0x0f));
+        tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
         tsc_read_s.m.space = RDWR_SPACE_USR1;
-        tsc_read_s.m.swap = RDWR_SWAP_DS;
+        tsc_read_s.m.swap = RDWR_SWAP_QS;
         tsc_read_s.m.am = 0x0;
-    
+   
         status = tsc_read_blk((ulong)offset, (char*) ifcdevice->sram_blk_buf, nsamples * ifcdevice->sample_size, tsc_read_s.mode);
         if (status) {
             printf("[TOSCA ERRROR ] tsc_blk_read() returned %d\n", status);
             return status;
         }
 
-#ifdef DEBUG
-        int32_t ui32_auxreg;
-        ifc_scope_acq_tcsr_read(ifcdevice, 0, &ui32_auxreg);
-        printf("[TOSCA CSR 0x70] = 0x%08x\n", ui32_auxreg);
-#endif
+// #ifdef DEBUG
+//         int32_t ui32_auxreg;
+//         ifc_scope_acq_tcsr_read(ifcdevice, 0, &ui32_auxreg);
+//         printf("[TOSCA CSR 0x70] = 0x%08x\n", ui32_auxreg);
+// #endif
+
         status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
         if (status) {
             return status;
@@ -722,7 +685,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         break;
     }
 
-#if DEBUG
+#if 0
     int16_t *itr;
     printf("%s(): u_base %p, acq_size %db, nsamples %d, npretrig %d, la %d, ptq %d, origin %p\n", __FUNCTION__,
             ifcdevice->sram_dma_buf->u_base, nsamples * ifcdevice->sample_size, nsamples, npretrig, last_address, ptq,
@@ -790,14 +753,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
     int32_t cs_reg;
     int32_t trig_reg;
 
-    TRACE_IOC;
-    TRACE_PARAM("switch mode", mode);
-
+    ifcdaqdrv_status status;
 
     /* Return immediately if device already is in correct mode */
     if(mode == ifcdevice->mode) {
         return status_success;
     }
+
+    TRACE_IOC;
 
     // CS register
     // - Move decimation
@@ -829,6 +792,9 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 
     ifcdevice->mode = mode;
 
+
+/* TODO: check the usage of register 0x63 (IFC_SCOPE_DTACQ_TCSR_GC) */
+
     /* Clear general control register and enable specific acquisition mode.. */
     if (ifcdevice->fmc == 1) {
         ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
@@ -840,6 +806,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
                                        IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT, 0xffffffff);
     }
 
+#if 0
+    /* TEST: try to configure registers 0x61 / 0x62 */
+    status = ifcdaqdrv_scope_smem_clearacq(ifcdevice);
+    //if (status)	return status;
+    printf("ifcdaqdrv_scope_smem_clearacq returned %d \n", status); 
+
+    status = ifcdaqdrv_scope_smem_configacq(ifcdevice);
+    //if (status)	return status; 
+	printf("ifcdaqdrv_scope_smem_configacq returned %d \n", status);
+#endif
+    
     ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
     ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
 
@@ -883,11 +860,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status status;
     uint32_t average;
 
-    TRACE_IOC;
-    TRACE_PARAM("set nsamples", nsamples);
-
-    /* ******************* Avoid using SRAM mode ****************************/
-#if 1
     // If samples fit in sram use sram.
     if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) {
 
@@ -901,8 +873,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
 
         return status;
     }
-#endif
 
+/***************************************************************************
+ *	SMEM MODE HAS NOT BEEN VALIDATED FOR IFC1410, ONLY SRAM IS FUNCTIONAL	
+ ***************************************************************************/
+
+#ifndef SMEM_MODE_ENABLED
+  	return status_argument_range;
+
+#else 
     status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
     if (status) printf("ifcdaqdrv_scope_get_average returned %d\n", status);
 
@@ -918,6 +897,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
         return ifcdaqdrv_scope_set_smem_nsamples(ifcdevice, nsamples);
     }
     return status_argument_range;
+#endif
 }
 
 ifcdaqdrv_status ifcdaqdrv_scope_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples)
@@ -937,10 +917,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status      status;
     uint32_t              nsamples;
     uint32_t              ptq;
-
-    TRACE_IOC;
-    TRACE_PARAM("npretrig", npretrig);
-
 
     /* Soft triggering doesn't work well enough with pre-trigger buffer */
     if(ifcdevice->trigger_type == ifcdaqdrv_trigger_soft && npretrig > 0) {
@@ -973,8 +949,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status      status;
     uint32_t              nsamples, ptq;
 
-    TRACE_IOC;
-
     switch(ifcdevice->mode){
     case ifcdaqdrv_acq_mode_sram:
         status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
@@ -998,8 +972,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
 
     *npretrig = ptq * nsamples;
 
-    TRACE_GET_PARAM("npretrig", *npretrig);
-
     return status_success;
 }
 
@@ -1007,19 +979,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_average(struct ifcdaqdrv_dev *ifcdevice, ui
     int32_t               i32_reg_val;
     ifcdaqdrv_status      status;
 
-    TRACE_IOC;
-
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
+    
     if(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) {
         *average = ifcdevice->averages[(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_downSMP_SHIFT];
         
-        TRACE_GET_PARAM("average", *average);
-
         return status;
     }
 
     *average = 1;
-    TRACE_GET_PARAM("average", *average);
     return status_success;
 }
 
@@ -1027,10 +995,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, ui
     uint32_t              i;
     int32_t               i32_reg_val;
     ifcdaqdrv_status      status;
-
-    TRACE_IOC;
-    TRACE_PARAM("set average", average);
-
 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if(status){
@@ -1096,8 +1060,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice)
 {
     ifcdaqdrv_status      status;
 
-    TRACE_IOC;
-
     ifcdevice->mode = ifcdaqdrv_acq_mode_smem;
 
     /* Set ACQ_downSMP_MOD to 1 (bit 15 = 1) */
@@ -1112,64 +1074,51 @@ ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice)
     return status_success;
 }
 
+/* Support functions to manipulate registers 0x61 / 0x62 (Data Acquisition Support ) */
+#define IFC_SCOPE_FMC1_DTACQ_SUPPORT 0x01
+#define IFC_SCOPE_FMC2_DTACQ_SUPPORT 0x02
+#define IFC_SCOPE_DTACQ_CLR_CMD 0x01010101
+#define IFC_SCOPE_DTACQ_RUNFIFO_CMD 0x06060606
 
-ifcdaqdrv_status ifcdaqdrv_scope_prepare_softtrigger(struct ifcdaqdrv_dev *ifcdevice)
+
+ifcdaqdrv_status ifcdaqdrv_scope_smem_clearacq(struct ifcdaqdrv_dev *ifcdevice)
 {
     ifcdaqdrv_status      status;
+
     TRACE_IOC;
-    int32_t i32_reg_val;
-    int32_t cs_reg;
-    int32_t trig_reg;
 
+    /* Argument validation */
+    if ((ifcdevice->fmc != 1) && (ifcdevice->fmc != 2)) 
+    	return status_argument_range;
 
-    // if ((ifcdevice->fmc != 1) || (ifcdevice->fmc != 2)) return status_argument_range;
-
-    // /* CLR aquisition to reset buffers */
-    // ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x01010101); // ACQ_CLR = 1 clear data acquisition DPRAM
-    // ifc_scope_tcsr_write(ifcdevice, ifcdevice->fmc, 0x00000000); // ACQ_CLR = 0
-      
-    // /* Enable all channels in FIFO mode / HALT when overflow */  
-    // status = ifc_scope_tcsr_setclr(ifcdevice, 1, 0x06060606, 0xffffffff);
-    // if (status) return status;
-
-
-
-    ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-    cs_reg = i32_reg_val & (IFC_SCOPE_TCSR_CS_ACQ_Single_MASK |
-                            IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK |
-                            IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK |
-                            IFC_SCOPE_TCSR_CS_ACQ_Buffer_Mode_MASK);
-    ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, &i32_reg_val);
-    trig_reg = i32_reg_val;
-
-    // Clear SCOPE app
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 0);
-    // Clear SCOPE trigger
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0);
-
-    /* Clear general control register and enable specific acquisition mode.. */
-    if (ifcdevice->fmc == 1) {
-        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
-                                                                            IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
-                                       IFC_SCOPE_DTACQ_TCSR_GC_FMC1_ACQRUN_SHIFT, 0xffffffff);
-    } else { /* fmc is FMC2 */
-        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
-                                                                            IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
-                                       IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT, 0xffffffff);
-    }
-
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
-
-    ifc_scope_tcsr_read(ifcdevice, ifcdevice->fmc, &i32_reg_val);
-    printf("################  ENABLING GLOBAL TRIGGER ####################\n");
-    printf("Register 0x%02x = 0x%08x \n", ifcdevice->fmc + 0x60, i32_reg_val) ;
-    /* Enable GLOBAL TRIGGER */
-    //ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, 0x80000000, 0);
-
-
-  return status_success;
+    /* Set CLR bits */
+    if (ifcdevice->fmc == 1)
+    	status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_FMC1_DTACQ_SUPPORT, IFC_SCOPE_DTACQ_CLR_CMD, 0xffffffff);
+    else
+    	status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_FMC2_DTACQ_SUPPORT, IFC_SCOPE_DTACQ_CLR_CMD, 0xffffffff);
+    
+    return status;
 }
+
+ifcdaqdrv_status ifcdaqdrv_scope_smem_configacq(struct ifcdaqdrv_dev *ifcdevice)
+{
+    ifcdaqdrv_status      status;
+
+    TRACE_IOC;
+
+    /* Argument validation */
+    if ((ifcdevice->fmc != 1) && (ifcdevice->fmc != 2)) 
+    	return status_argument_range;
+
+    /* Set CLR bits */
+    if (ifcdevice->fmc == 1)
+    	status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_FMC1_DTACQ_SUPPORT, IFC_SCOPE_DTACQ_RUNFIFO_CMD, 0xffffffff);
+    else
+    	status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_FMC2_DTACQ_SUPPORT, IFC_SCOPE_DTACQ_RUNFIFO_CMD, 0xffffffff);
+    
+    return status;
+}
+
 
 void manualswap(uint16_t *buffer, int nsamples)
 {
@@ -1183,3 +1132,4 @@ void manualswap(uint16_t *buffer, int nsamples)
 
     }
 }
+
