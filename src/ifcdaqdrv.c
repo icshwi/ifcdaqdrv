@@ -790,9 +790,11 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
     }
 
     switch (trigger) {
+
+    /* Changed mask register to adapt for mTCA instead of VME */
     case ifcdaqdrv_trigger_backplane:
-        i32_trig_val |= (mask & 0x7f) << 20;  // Set VME pin
-        i32_trig_val |= 0x11 << 16;           // Set backplane trigger
+        i32_trig_val |= (mask & 0x07) << 20;  // Set MTCA line
+        i32_trig_val |= 0x03 << 16;           // Set backplane trigger
         if (rising_edge & 0x7FFFFFFF) {
             i32_trig_val |= 1 << 27;
         }
