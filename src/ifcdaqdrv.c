@@ -847,6 +847,17 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
         }
     case ifcdaqdrv_trigger_none:
         i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
+
+    /* Additional cases needed to test the backplane triggering */
+    case ifcdaqdrv_trigger_testmanual:
+    case ifcdaqdrv_trigger_testauto:
+        /* MASK will be either 11000 or 11001 */
+        i32_trig_val |= (mask & 0x1F) << 20;  // Set self trigger/ self periodic trigger 
+        i32_trig_val |= 0x03 << 16;           // keeps backplane trigger [17:16] = 11
+        if (rising_edge & 0x7FFFFFFF) {
+            i32_trig_val |= 1 << 27;
+        }
+        break;
     default:
         break;
     }
@@ -1534,4 +1545,59 @@ ifcdaqdrv_status ifcdaqdrv_debug(struct ifcdaqdrv_usr *ifcuser) {
         printf("[0x%02x]: 0x%08x\n", i, i32_reg_val);
     }
     return status_success;
+}
+
+
+/* Unique function to simulate backplane trigger */
+ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, uint8_t functionmask, uint32_t clk_divider) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    /* Function mask is like an enum 
+    * 0 -> stop periodic trigger
+    * 1 -> start periodic trigger
+    * 2 -> trigger manual trigger (under demand)
+    * 3 -> configure clock divisor
+    */
+
+    status = status_success;
+
+    switch (functionmask)
+    {
+        case 0: // stop periodic trigger            
+            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x0, 0x3)) // clear bits 1:0
+                status = status_device_access;
+            
+            printf("Stopping simulated trigger\n");
+            break;
+
+        case 1:
+            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x2, 0x1)) // set bit 2
+                status = status_device_access;
+            
+            printf("Starting periodic simulated trigger \n");
+            break;
+
+        case 2:
+            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x1, 0x2)) // set bit 1
+                status = status_device_access;
+
+            printf("Sending manual simulated trigger\n");
+            break;
+
+        case 3: 
+            if (ifc_xuser_tcsr_write(ifcdevice, 0x6F, (clk_divider & 0xFFFFFFFC)))
+                status = status_device_access;
+
+            printf("Changing clock divider to 0x%08x \n", (clk_divider & 0xFFFFFFFC));
+            break;
+    }    
+
+    return status;
 }

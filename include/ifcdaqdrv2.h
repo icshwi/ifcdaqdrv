@@ -104,7 +104,9 @@ typedef enum {
     ifcdaqdrv_trigger_backplane,  /**< Interpret channel mask as a VME trigger */
     ifcdaqdrv_trigger_frontpanel, /**< Interpret channel mask as DAQ channel or FMC GPIO */
     ifcdaqdrv_trigger_auto,       /**< Deprecated */
-    ifcdaqdrv_trigger_soft        /**< Manually trigger from software immediately after arming device */
+    ifcdaqdrv_trigger_soft,       /**< Manually trigger from software immediately after arming device */
+    ifcdaqdrv_trigger_testmanual, /**< TEST ONLY: simulated backplane trigger under demand */
+    ifcdaqdrv_trigger_testauto    /**< TEST ONLY: simulated backplane trigger using periodic clk division */
 } ifcdaqdrv_trigger_type;
 
 /**
@@ -576,6 +578,12 @@ ifcdaqdrv_status ifcdaqdrv_get_fw_revision(struct ifcdaqdrv_usr *ifcuser, uint8_
  */
 
 ifcdaqdrv_status ifcdaqdrv_get_fw_version(struct ifcdaqdrv_usr *ifcuser, uint8_t *version);
+
+
+/*
+ * Test function for the backplane triggering 
+ */
+ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, uint8_t functionmask, uint32_t clk_divider);
 
 #ifdef __cplusplus
 }
