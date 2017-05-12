@@ -1548,56 +1548,77 @@ ifcdaqdrv_status ifcdaqdrv_debug(struct ifcdaqdrv_usr *ifcuser) {
 }
 
 
-/* Unique function to simulate backplane trigger */
-ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, uint8_t functionmask, uint32_t clk_divider) 
+/* Function to simulate backplane trigger */
+ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider) 
 {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
+    uint32_t ui32_regval;
 
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
     }
 
-    /* Function mask is like an enum 
-    * 0 -> stop periodic trigger
-    * 1 -> start periodic trigger
-    * 2 -> trigger manual trigger (under demand)
-    * 3 -> configure clock divisor
-    */
-
     status = status_success;
 
-    switch (functionmask)
+    switch (function)
     {
-        case 0: // stop periodic trigger            
+        case ifcdaqdrv_simtrig_stop: // stop periodic trigger            
             if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x0, 0x3)) // clear bits 1:0
                 status = status_device_access;
+            else
+                printf("Stopping simulated trigger\n");
             
-            printf("Stopping simulated trigger\n");
             break;
 
-        case 1:
+        case ifcdaqdrv_simtrig_startauto:
             if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x2, 0x1)) // set bit 2
-                status = status_device_access;
+                status = status_device_access;            
+            else
+                printf("Starting periodic simulated trigger \n");
             
-            printf("Starting periodic simulated trigger \n");
             break;
 
-        case 2:
+        case ifcdaqdrv_simtrig_manual:
             if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x1, 0x2)) // set bit 1
                 status = status_device_access;
-
-            printf("Sending manual simulated trigger\n");
+            else
+                printf("Sending manual simulated trigger\n");
+            
             break;
 
-        case 3: 
-            if (ifc_xuser_tcsr_write(ifcdevice, 0x6F, (clk_divider & 0xFFFFFFFC)))
+        case ifcdaqdrv_simtrig_setfreq:
+
+            /* prevent negative values*/
+            if (clk_divider <= 0) clk_divider = 4;
+            
+            /* calculate divisor */
+            ui32_regval = 100000000 / clk_divider;
+
+            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, (ui32_regval & 0xFFFFFFFC), ((~ui32_regval) & 0xFFFFFFFC)))
                 status = status_device_access;
-
-            printf("Changing clock divider to 0x%08x \n", (clk_divider & 0xFFFFFFFC));
+            else              
+                printf("Changing clock divider to 0x%08x \n", (clk_divider & 0xFFFFFFFC));
+            
             break;
-    }    
+        
+        case ifcdaqdrv_simtrig_readreg:
+            if (ifc_xuser_tcsr_read(ifcdevice, 0x6F, (int32_t*) &ui32_regval))
+                status = status_device_access;
+            else
+                printf("Register 0x6F = 0x%08x \n", ui32_regval);
+
+            break;
+        
+        default:
+            printf("Invalid set_trigger_command\n");
+            break;
+    }   
+
+    if (status) printf("Error while trying to access register 0x6F\n");     
 
     return status;
 }
+
+

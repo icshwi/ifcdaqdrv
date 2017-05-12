@@ -583,7 +583,18 @@ ifcdaqdrv_status ifcdaqdrv_get_fw_version(struct ifcdaqdrv_usr *ifcuser, uint8_t
 /*
  * Test function for the backplane triggering 
  */
-ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, uint8_t functionmask, uint32_t clk_divider);
+typedef enum {
+    ifcdaqdrv_simtrig_stop,     
+    ifcdaqdrv_simtrig_startauto,   
+    ifcdaqdrv_simtrig_manual,   
+    ifcdaqdrv_simtrig_setfreq,   
+    ifcdaqdrv_simtrig_readreg
+ } ifcdaqdrv_simtrigger_action;
+
+ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider);
+
+
+
 
 #ifdef __cplusplus
 }
