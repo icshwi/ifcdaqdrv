@@ -227,6 +227,13 @@ ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq
 ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
 
 
+void ifcdaqdrv_manualswap(uint16_t *buffer, int nsamples);
+void ifcdaqdrv_start_tmeas(void);
+void ifcdaqdrv_end_tmeas(void);
+long ifcdaqdrv_elapsedtime(void);
+
+
+
 #endif // _IFC1210SCOPEDRV_UTILS_H_
 
 

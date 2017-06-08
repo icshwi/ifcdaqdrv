@@ -82,7 +82,7 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->get_pattern           = adc3110_get_test_pattern;
 
     ifcdevice->read_ai_ch            = ifcdaqdrv_scope_read_ai_ch;
-    ifcdevice->read_ai               = ifcdaqdrv_scope_read_ai;;
+    ifcdevice->read_ai               = ifcdaqdrv_scope_read_ai;
 
     ifcdevice->normalize_ch          = adc3110_read_ch;
     ifcdevice->normalize             = adc3110_read;
@@ -1103,8 +1103,12 @@ ifcdaqdrv_status adc3110_read(struct ifcdaqdrv_dev *ifcdevice, void *dst, size_t
     /* Multiply offsets by number of channels */
     target = ((int32_t *)dst) + dst_offset;
     origin = ((int16_t *)src) + src_offset * 8;
-
+    
     for (itr = origin; itr < origin + nelm * 8; target += 2, itr += 16) {
+        
+        if (ifcdevice->mode == ifcdaqdrv_acq_mode_smem)
+            ifcdaqdrv_manualswap((uint16_t*) itr, 16);
+
         *((target + 0) + 0 * channel_nsamples) = (int16_t)(*(itr + 0) - 32768);
         *((target + 1) + 0 * channel_nsamples) = (int16_t)(*(itr + 1) - 32768);
         *((target + 0) + 1 * channel_nsamples) = (int16_t)(*(itr + 2) - 32768);

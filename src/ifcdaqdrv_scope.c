@@ -22,9 +22,6 @@
 // #include "ifcdaqdrv_adc3112.h"
 //typedef long dma_addr_t;
 
-void manualswap(uint16_t *buffer, int nsamples);
-
-
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
 #ifdef ENABLE_I2C
     char *p;
@@ -514,10 +511,13 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
             return status_device_access;
         }
 
+        ifcdaqdrv_start_tmeas();
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->nchannels * ifcdevice->sample_size);
         if (status) {
             return status;
         }
+        ifcdaqdrv_end_tmeas();
+        printf("ifcdaqdrv_read_smem_unlocked took %d us\n", ifcdaqdrv_elapsedtime());
 
         status = ifcdaqdrv_get_smem_la(ifcdevice, &last_address);
         if (status) {
@@ -533,6 +533,9 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         npretrig = (nsamples * ptq) / 8;
 
 #if PRETRIG_ORGANIZE
+
+        ifcdaqdrv_start_tmeas();
+
         // * For ADC311X increase Last address with 2 (because there are 2 samples per "acquisition block" in DDR).
         // * For FMC420 decrease Last address with 3 (becayse LA is 4 samples to much high, other offsets has also been seen).
         int32_t samples_per_block = ifcdevice->sample_size == 2 ? 2 : -3;
@@ -555,6 +558,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         if (status) {
             return status;
         }
+
+        ifcdaqdrv_end_tmeas();
+        printf("pretigger organization took %d us\n", ifcdaqdrv_elapsedtime());
+
 #if 0
         int32_t *itr;
         printf("%s(): u_base %p, acq_size %db, nsamples %d, npretrig %d, la %d, ptq %d, origin %p\n", __FUNCTION__,
@@ -606,11 +613,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             return status;
         }
 
-        // status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
-        // if (status) {
-        //     return status;
-        // }
-
+#ifdef SRAM_DMA
+        
+        status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+        if (status) {
+            return status;
+        }
+#else
+        
         /* Transfer data to sram_blk_buf */
         tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
         tsc_read_s.m.space = RDWR_SPACE_USR1;
@@ -622,13 +632,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             printf("[TOSCA ERRROR ] tsc_blk_read() returned %d\n", status);
             return status;
         }
-
-// #ifdef DEBUG
-//         int32_t ui32_auxreg;
-//         ifc_scope_acq_tcsr_read(ifcdevice, 0, &ui32_auxreg);
-//         printf("[TOSCA CSR 0x70] = 0x%08x\n", ui32_auxreg);
-// #endif
-
+#endif
+        
         status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
         if (status) {
             return status;
@@ -639,17 +644,18 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             return status;
         }
 
+#ifdef SRAM_DMA
         /* TODO: check the usage of dma_buf for TOSCA user library */
-        //origin   = ifcdevice->sram_dma_buf->u_base;
-
-        manualswap((uint16_t*) ifcdevice->sram_blk_buf,nsamples);
-
+        ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
+        origin   = ifcdevice->sram_dma_buf->u_base;
+#else
+        ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_blk_buf,nsamples);
         origin = (int16_t*) ifcdevice->sram_blk_buf;
+#endif
+        
         npretrig = (nsamples * ptq) / 8;
         break;
     
-
-
 
     case ifcdaqdrv_acq_mode_smem:
 #if 0
@@ -771,8 +777,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 
     switch(mode){
     case ifcdaqdrv_acq_mode_sram:
+        printf("[IFC1410 DEBUG] Switching to SRAM mode\n");
         break;
     case ifcdaqdrv_acq_mode_smem:
+        printf("[IFC1410 DEBUG] Switching to SMEM mode\n");
         break;
     }
 
@@ -1119,17 +1127,4 @@ ifcdaqdrv_status ifcdaqdrv_scope_smem_configacq(struct ifcdaqdrv_dev *ifcdevice)
     return status;
 }
 
-
-void manualswap(uint16_t *buffer, int nsamples)
-{
-    uint16_t aux;
-    int i;
-
-    for (i = 0; i < nsamples; i++)
-    {
-        aux = (buffer[i] & 0xff00) >> 8;
-        buffer[i] = ((buffer[i] & 0x00ff) << 8) | aux;
-
-    }
-}
 

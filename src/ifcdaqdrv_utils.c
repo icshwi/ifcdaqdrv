@@ -8,6 +8,8 @@
 #include <inttypes.h>
 typedef long dma_addr_t;
 
+#include <time.h>
+
 #include "tscioctl.h"
 #include "tsculib.h"
 
@@ -18,6 +20,12 @@ typedef long dma_addr_t;
 // #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_scope.h"
+
+
+/******************************/
+struct timespec ts_start, ts_end;
+/****************************/
+
 
 ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val){
     int ret;
@@ -216,10 +224,11 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_sram_buf;
     }
 
-#if 0
+#ifdef SRAM_DMA
     LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
-        goto err_mmap_sram;
+        //goto err_mmap_sram;
+        printf("Error while tryinf to map u_base using kbuf_mmap [SRAM]\n");
     }
 #endif
 
@@ -243,10 +252,11 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
-#if 0
+#ifdef SRAM_DMA
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
-        goto err_mmap_smem;
+        //goto err_mmap_smem;
+        printf("Error while tryinf to map u_base using kbuf_mmap\n");
     }
 #endif
 
@@ -264,22 +274,22 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
 
 #ifdef DEBUG
-    // uint64_t tp_sram;
-    // uint64_t tp_smem;
-    // tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
-    // tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
+    uint64_t tp_sram;
+    uint64_t tp_smem;
+    tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
+    tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
 
-    // /* PRIx64 macro is from inttypes.h */
-    // printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
-    // printf("########################################################################\n");
-    // printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
-    // printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
-    // printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
-    // printf("########################################################################\n");
-    // printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
-    // printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
-    // printf("smem_dma_buf->u_base = 0x%" PRIXPTR"\n", (uintptr_t) ifcdevice->smem_dma_buf->u_base);
-    // printf("########################################################################\n");
+    /* PRIx64 macro is from inttypes.h */
+    printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
+    printf("########################################################################\n");
+    printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
+    printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
+    printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
+    printf("########################################################################\n");
+    printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
+    printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
+    printf("smem_dma_buf->u_base = 0x%" PRIXPTR"\n", (uintptr_t) ifcdevice->smem_dma_buf->u_base);
+    printf("########################################################################\n");
 #endif
 
     return status_success;
@@ -371,27 +381,6 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.wait_mode  = 0;
 #endif
 
-#if 0
-    /* Dumping dma_req */
-    printf("[tsc_ioctl_dma_req] src_addr =  0x%" PRIx64 "\n", dma_req.src_addr);
-    printf("[tsc_ioctl_dma_req] src_space = %d \n", dma_req.src_space);
-    printf("[tsc_ioctl_dma_req] src_mode =  %d \n", dma_req.src_mode);
-
-    printf("[tsc_ioctl_dma_req] des_addr =  0x%" PRIx64 "\n", dma_req.des_addr);
-    printf("[tsc_ioctl_dma_req] des_space = %d \n", dma_req.des_space);
-    printf("[tsc_ioctl_dma_req] des_mode =  %d \n", dma_req.des_mode);
-
-    printf("[tsc_ioctl_dma_req] size =  %d \n", (uint) dma_req.size);
-    printf("[tsc_ioctl_dma_req] size = 0x%08x \n", dma_req.size);
-
-    printf("[tsc_ioctl_dma_req] start_mode =  %d \n", dma_req.start_mode);
-    printf("[tsc_ioctl_dma_req] intr_mode =  %d \n", dma_req.intr_mode);
-    printf("[tsc_ioctl_dma_req] wait_mode =  %d \n", dma_req.wait_mode);
-
-#endif
-
-
-
     status = tsc_dma_alloc(0);
     if (status) 
     {
@@ -407,14 +396,6 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
       return status;
     }
 
-    /* Print DMA status */
-    printf("###### DMA0 CSR registers after alloc #######\n");
-    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
-    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
-    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
-    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
-    printf("###### ############ #######\n");
-    
     // status = pevx_dma_move(ifcdevice->card, &dma_req);
     status = tsc_dma_move(&dma_req);
 
@@ -427,45 +408,25 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 
     dma_sts.dma.chan = 0;
     status = tsc_dma_status(&dma_sts);
+    
     if (status) 
     {
       LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
       return status;
     }
-
-    /* Print DMA status */
-    printf("###### DMA0 CSR registers after DMA MOVE #######\n");
-    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
-    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
-    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
-    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
-    printf("###### ############ #######\n");
-
 
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
     status = tsc_dma_wait(&dma_req);
 
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
-    if (status) 
-    {
-      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    /* Print DMA status */
-    printf("###### DMA0 CSR registers after DMA WAIT #######\n");
-    // printf("RD: rd_csr=0x%08x rd_ndes=0x%08x rd_cdes=0x%08x rd_cnt=0x%08x \n", dma_sts.rd_csr, dma_sts.rd_ndes, dma_sts.rd_cdes, dma_sts.rd_cnt);
-    // printf("WR: wr_csr=0x%08x wr_ndes=0x%08x wr_cdes=0x%08x wr_cnt=0x%08x \n", dma_sts.wr_csr, dma_sts.wr_ndes, dma_sts.wr_cdes, dma_sts.wr_cnt);
-    printf("RD: rd_cnt=0x%08x \n", dma_sts.rd_cnt);
-    printf("WR: wr_cnt=0x%08x \n", dma_sts.wr_cnt);
-    printf("###### ############ #######\n");
-
+    // dma_sts.dma.chan = 0;
+    // status = tsc_dma_status(&dma_sts);
+    // if (status) 
+    // {
+    //   LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+    //   return status;
+    // }
 
     if (status) printf("tsc_dma_wait() returned %d\n", status);
-
-    if (dma_req.dma_status & DMA_STATUS_TMO) printf("TSC DMA TIMEOUT!!! \n");
-    if (dma_req.dma_status & DMA_STATUS_ERR) printf("TSC DMA ERROR!!! \n");
 
     // * 0x2 << 28 is the interrupt number.
     // * The board can only read from the shared memory. If we are not reading
@@ -481,9 +442,8 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
         LOG((4, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));
 #endif
         
-	tsc_dma_free(0);
-
-	return status_read;
+        tsc_dma_free(0);
+        return status_read;
     }
     
     /*free DMA channel 0 */
@@ -599,6 +559,8 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
     uint32_t total_size; /* Debug variable */
     uint64_t total_time; /* Debug variable */
 
+    long meastime = 0;
+
     if(DEBUG) total_size = size;
     LOG((LEVEL_DEBUG, "Copying from: 0x%08x, amount: %u\n", offset, size));
 
@@ -635,7 +597,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
 					     dma_buf->b_base, 
-					     DMA_SPACE_PCIE, 
+					     DMA_SPACE_PCIE | DMA_SPACE_WS, 
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
 					     );
@@ -657,6 +619,44 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 
     return status_success;
 }
+
+void ifcdaqdrv_manualswap(uint16_t *buffer, int nsamples)
+{
+    uint16_t aux;
+    int i;
+
+    for (i = 0; i < nsamples; i++)
+    {
+        aux = (buffer[i] & 0xff00) >> 8;
+        buffer[i] = ((buffer[i] & 0x00ff) << 8) | aux;
+
+    }
+}
+
+void ifcdaqdrv_start_tmeas(void)
+{
+    clock_gettime(CLOCK_REALTIME, &ts_start);
+}
+
+void ifcdaqdrv_end_tmeas(void)
+{
+    clock_gettime(CLOCK_REALTIME, &ts_end);
+}
+
+
+long ifcdaqdrv_elapsedtime(void)
+{
+    struct timespec temp;
+    if ((ts_end.tv_nsec-ts_start.tv_nsec)<0) {
+        temp.tv_sec = ts_end.tv_sec-ts_start.tv_sec-1;
+        temp.tv_nsec = 1000000000+ts_end.tv_nsec-ts_start.tv_nsec;
+    } else {
+        temp.tv_sec = ts_end.tv_sec-ts_start.tv_sec;
+        temp.tv_nsec = ts_end.tv_nsec-ts_start.tv_nsec;
+    }
+    return (temp.tv_nsec / 1000);
+}
+
 
 
 // The following part is kept because we might implement interrupt handling with signals in the future...

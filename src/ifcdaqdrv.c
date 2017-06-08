@@ -358,7 +358,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
         timeo = SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6);
 
 #ifdef DEBUG
-        LOG((6, "%f %d iterations\n", acquisition_time, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
+        //LOG((6, "%f %d iterations\n", acquisition_time, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
 #endif
 
         do {
@@ -793,6 +793,9 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
 
     /* Changed mask register to adapt for mTCA instead of VME */
     case ifcdaqdrv_trigger_backplane:
+        i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
+        i32_trig_val = 1 << 31; // Enable trigger
+
         i32_trig_val |= (mask & 0x07) << 20;  // Set MTCA line
         i32_trig_val |= 0x03 << 16;           // Set backplane trigger
         if (rising_edge & 0x7FFFFFFF) {
@@ -851,12 +854,18 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
     /* Additional cases needed to test the backplane triggering */
     case ifcdaqdrv_trigger_testmanual:
     case ifcdaqdrv_trigger_testauto:
+
+        i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
+        i32_trig_val = 1 << 31; // Enable trigger
+
         /* MASK will be either 11000 or 11001 */
         i32_trig_val |= (mask & 0x1F) << 20;  // Set self trigger/ self periodic trigger 
         i32_trig_val |= 0x03 << 16;           // keeps backplane trigger [17:16] = 11
         if (rising_edge & 0x7FFFFFFF) {
             i32_trig_val |= 1 << 27;
         }
+
+
         break;
     default:
         break;
@@ -1594,7 +1603,7 @@ ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqd
             if (clk_divider <= 0) clk_divider = 4;
             
             /* calculate divisor */
-            ui32_regval = 100000000 / clk_divider;
+            ui32_regval = 125000000 / clk_divider;
 
             if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, (ui32_regval & 0xFFFFFFFC), ((~ui32_regval) & 0xFFFFFFFC)))
                 status = status_device_access;
