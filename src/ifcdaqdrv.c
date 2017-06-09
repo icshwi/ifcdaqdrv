@@ -17,6 +17,8 @@
 #include "ifcdaqdrv_scope.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
+#include "ifcfastintdrv.h"
+#include "ifcfastintdrv_utils.h"
 
 LIST_HEAD(ifcdaqdrv_devlist);
 pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -115,10 +117,10 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         LOG((5, "Generic DAQ Application\n"));
         /* Recognized scope implementation. */
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     LOG((5, "Fast Interlock Application\n"));
-    //     /* Recognized fast interlock implementation */
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        LOG((5, "Fast Interlock Application\n"));
+        /* Recognized fast interlock implementation */
+        break;
     default:
         // Skip all signature verification for now...
         //status = status_incompatible;
@@ -127,6 +129,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
     ifcdevice->app_signature = i32_reg_val;
 
+    /* OLIVER: double check */
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
 
@@ -154,7 +157,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
 #ifdef ENABLE_I2C
 
     printf("Trying to read EEPROM \n");
-
+/* OLIVER: double check this... */
     status = ifc_fmc_eeprom_read_fru(ifcdevice, ifcdevice->fru_id);
     if (status == status_fru_info_invalid) {
         /* .... fall back to IOxOS proprietary signature */
@@ -188,16 +191,16 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
             goto err_read;
         }
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     status = ifcfastintdrv_register(ifcdevice);
-    //     if(status) {
-    //         goto err_dev_alloc;
-    //     }
-    //     status = ifcfastintdrv_dma_allocate(ifcdevice);
-    //     if(status) {
-    //         goto err_read;
-    //     }
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        status = ifcfastintdrv_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+        status = ifcfastintdrv_dma_allocate(ifcdevice);
+        if(status) {
+            goto err_read;
+        }
+        break;
     default:
         break;
     }
