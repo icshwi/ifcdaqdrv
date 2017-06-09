@@ -51,6 +51,7 @@ typedef enum {
  *
  * The ADC3110 maps fmc0 to frontpanel led and fmc1 to rear side PCB led.
  * The DTACQ doesn't have any FMC led.
+ * The ADC3117 maps fmc0 to frontpanel green led and fmc1 to frontpanel red led.
  */
 
 typedef enum {

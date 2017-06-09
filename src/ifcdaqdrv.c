@@ -118,10 +118,10 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         LOG((5, "Generic DAQ Application\n"));
         /* Recognized scope implementation. */
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     LOG((5, "Fast Interlock Application\n"));
-    //     /* Recognized fast interlock implementation */
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        LOG((5, "Fast Interlock Application\n"));
+        /* Recognized fast interlock implementation */
+        break;
     default:
         // Skip all signature verification for now...
         //status = status_incompatible;
@@ -179,16 +179,16 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
             goto err_read;
         }
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     status = ifcfastintdrv_register(ifcdevice);
-    //     if(status) {
-    //         goto err_dev_alloc;
-    //     }
-    //     status = ifcfastintdrv_dma_allocate(ifcdevice);
-    //     if(status) {
-    //         goto err_read;
-    //     }
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        status = ifcfastintdrv_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+        status = ifcfastintdrv_dma_allocate(ifcdevice);
+        if(status) {
+            goto err_read;
+        }
+        break;
     default:
         break;
     }
