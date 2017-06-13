@@ -130,19 +130,23 @@ ifcdaqdrv_status adc3117_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     if (status)
         return status;
 
-    status = adc3117_set_adc_channel_negative_input(ifcdevice, GND);
+    status = adc3117_set_adc_channel_negative_input(ifcdevice, GND); // ADC channel negative input to GND
     if (status)
         return status;
 
-    status = adc3117_set_adc_channel_positive_input(ifcdevice, GND);
+    status = adc3117_set_adc_channel_positive_input(ifcdevice, GND); // ADC channel positive input to GND
     if (status)
         return status;
 
-    status = adc3117_set_gain(ifcdevice, 0, GAIN_x1);
+    status = adc3117_set_gain(ifcdevice, 0, GAIN_x1); // Disable gain
     if (status)
         return status;
 
-    status = adc3117_set_offset(ifcdevice, 0x0000);
+    status = adc3117_set_offset(ifcdevice, 0x0000); // Disable offset
+    if (status)
+        return status;
+
+    status = adc3117_configuration_command(ifcdevice); // Send config
     if (status)
         return status;
 
