@@ -751,8 +751,46 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
 
     return status_success;
 }
-// TODO Temporary include
-//#include "ifcdaqdrv_acq420.h"
+
+ifcdaqdrv_status ifcdaqdrv_scope_read(struct ifcdaqdrv_dev *ifcdevice, void *dst, size_t dst_offset, void *src, size_t src_offset, size_t nelm, size_t channel_nsamples) {
+    int32_t *target; /* Copy to this address */
+    int16_t *itr;    /* Iterator for iterating over "data" */
+    int16_t *origin; /* Copy from this address */
+    int16_t channel;
+
+    /* Multiply offsets by number of channels */
+    target = ((int32_t *)dst) + dst_offset;
+    origin = ((int16_t *)src) + src_offset * ifcdevice->nchannels;
+
+    for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; target += 2, itr += (ifcdevice->nchannels * 2)) {
+        for (channel = 0; channel < ifcdevice->nchannels; channel++) {
+            *((target + 0) + channel * channel_nsamples) = (int16_t)(*(itr + channel * 2) - 32768);
+            *((target + 1) + channel * channel_nsamples) = (int16_t)(*(itr + (channel * 2 + 1)) - 32768);
+        }
+    }
+    return status_success;
+}
+
+ifcdaqdrv_status ifcdaqdrv_scope_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *res, void *data, size_t offset,
+                              size_t nelm) {
+    UNUSED(ifcdevice);
+    int16_t *origin = (int16_t *)data + offset;
+    int16_t *itr;
+    int32_t *target = res;
+
+    if(ifcdevice->mode == ifcdaqdrv_acq_mode_smem) {
+        for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; ++target, itr += ifcdevice->nchannels) {
+            *target = (int16_t)(*(itr + channel) - 32768);
+        }
+        return status_success;
+    }
+
+    for (itr = origin; itr < origin + nelm; ++target, ++itr) {
+        *target = (int16_t)(*itr - 32768);
+    }
+
+    return status_success;
+}
 
 ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_acq_store_mode mode) {
     int32_t i32_reg_val;
