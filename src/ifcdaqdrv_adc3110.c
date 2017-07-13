@@ -84,8 +84,8 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->read_ai_ch            = ifcdaqdrv_scope_read_ai_ch;
     ifcdevice->read_ai               = ifcdaqdrv_scope_read_ai;
 
-    ifcdevice->normalize_ch          = adc3110_read_ch;
-    ifcdevice->normalize             = adc3110_read;
+    ifcdevice->normalize_ch          = ifcdaqdrv_scope_read_ch;
+    ifcdevice->normalize             = ifcdaqdrv_scope_read;
 
     ifcdevice->mode_switch = ifcdaqdrv_scope_switch_mode; // Changed default mode to SMEM
 
@@ -1091,63 +1091,6 @@ ifcdaqdrv_status adc3110_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, 
     *threshold = threshold_adc;
 
     return status;
-}
-
-ifcdaqdrv_status adc3110_read(struct ifcdaqdrv_dev *ifcdevice, void *dst, size_t dst_offset, void *src, size_t src_offset, size_t nelm, size_t channel_nsamples) {
-    UNUSED(ifcdevice);
-
-    int32_t *target; /* Copy to this address */
-    int16_t *itr;    /* Iterator for iterating over "data" */
-    int16_t *origin; /* Copy from this address */
-
-    /* Multiply offsets by number of channels */
-    target = ((int32_t *)dst) + dst_offset;
-    origin = ((int16_t *)src) + src_offset * 8;
-    
-    for (itr = origin; itr < origin + nelm * 8; target += 2, itr += 16) {
-        
-        if (ifcdevice->mode == ifcdaqdrv_acq_mode_smem)
-            ifcdaqdrv_manualswap((uint16_t*) itr, 16);
-
-        *((target + 0) + 0 * channel_nsamples) = (int16_t)(*(itr + 0) - 32768);
-        *((target + 1) + 0 * channel_nsamples) = (int16_t)(*(itr + 1) - 32768);
-        *((target + 0) + 1 * channel_nsamples) = (int16_t)(*(itr + 2) - 32768);
-        *((target + 1) + 1 * channel_nsamples) = (int16_t)(*(itr + 3) - 32768);
-        *((target + 0) + 2 * channel_nsamples) = (int16_t)(*(itr + 4) - 32768);
-        *((target + 1) + 2 * channel_nsamples) = (int16_t)(*(itr + 5) - 32768);
-        *((target + 0) + 3 * channel_nsamples) = (int16_t)(*(itr + 6) - 32768);
-        *((target + 1) + 3 * channel_nsamples) = (int16_t)(*(itr + 7) - 32768);
-        *((target + 0) + 4 * channel_nsamples) = (int16_t)(*(itr + 8) - 32768);
-        *((target + 1) + 4 * channel_nsamples) = (int16_t)(*(itr + 9) - 32768);
-        *((target + 0) + 5 * channel_nsamples) = (int16_t)(*(itr + 10) - 32768);
-        *((target + 1) + 5 * channel_nsamples) = (int16_t)(*(itr + 11) - 32768);
-        *((target + 0) + 6 * channel_nsamples) = (int16_t)(*(itr + 12) - 32768);
-        *((target + 1) + 6 * channel_nsamples) = (int16_t)(*(itr + 13) - 32768);
-        *((target + 0) + 7 * channel_nsamples) = (int16_t)(*(itr + 14) - 32768);
-        *((target + 1) + 7 * channel_nsamples) = (int16_t)(*(itr + 15) - 32768);
-    }
-    return status_success;
-}
-
-ifcdaqdrv_status adc3110_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *res, void *data, size_t offset,
-                              size_t nelm) {
-    UNUSED(ifcdevice);
-    int16_t *origin = (int16_t *)data + offset;
-    int16_t *itr;
-    int32_t *target = res;
-
-    if(ifcdevice->mode == ifcdaqdrv_acq_mode_smem) {
-        for (itr = origin; itr < origin + nelm * 8; ++target, itr += 8) {
-            *target = (int16_t)(*(itr + channel) - 32768);
-        }
-        return status_success;
-    }
-
-    for (itr = origin; itr < origin + nelm; ++target, ++itr) {
-        *target = (int16_t)(*itr - 32768);
-    }
-
-    return status_success;
 }
 
 ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,

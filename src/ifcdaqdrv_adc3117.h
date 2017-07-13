@@ -103,10 +103,6 @@ ifcdaqdrv_status adc3117_get_gain(struct ifcdaqdrv_dev *ifcdevice, uint32_t chan
 ifcdaqdrv_status adc3117_set_test_pattern(struct ifcdaqdrv_dev *ifcdevice, unsigned channel, ifcdaqdrv_pattern pattern);
 ifcdaqdrv_status adc3117_get_test_pattern(struct ifcdaqdrv_dev *ifcdevice, unsigned channel, ifcdaqdrv_pattern *pattern);
 
-ifcdaqdrv_status adc3117_read(struct ifcdaqdrv_dev *ifcdevice, void *dst, size_t dst_offset, void *src, size_t src_offset, size_t nelm, size_t channel_nsamples);
-ifcdaqdrv_status adc3117_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *res, void *data, size_t offset,
-                              size_t nelm);
-
 ifcdaqdrv_status adc3117_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC3117_SPI_DEVICE device, int addr, uint32_t
                                          data);
 ifcdaqdrv_status adc3117_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3117_SPI_DEVICE device, int addr,
