@@ -517,7 +517,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
             return status;
         }
         ifcdaqdrv_end_tmeas();
-        printf("ifcdaqdrv_read_smem_unlocked took %d us\n", ifcdaqdrv_elapsedtime());
+        printf("[ifcdaqdrv] ifcdaqdrv_read_smem_unlocked took %d us\n", ifcdaqdrv_elapsedtime());
 
         status = ifcdaqdrv_get_smem_la(ifcdevice, &last_address);
         if (status) {
@@ -560,7 +560,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         }
 
         ifcdaqdrv_end_tmeas();
-        printf("pretigger organization took %d us\n", ifcdaqdrv_elapsedtime());
+        printf("[ifcdaqdrv] pretigger organization took %d us\n", ifcdaqdrv_elapsedtime());
 
 #if 0
         int32_t *itr;

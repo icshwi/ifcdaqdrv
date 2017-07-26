@@ -451,6 +451,8 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     if (status) 
     {
       LOG((4, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      printf("Trying to dma_free 5 times!\n");
+
       return status;
     }
 
