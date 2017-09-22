@@ -62,6 +62,9 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     int status = 0;
     uint32_t nsamples_max;
 
+    /* Activate FMC */
+    status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
+
     ifcdevice->init_adc              = adc3110_init_chips;
     ifcdevice->get_signature         = adc3110_get_signature;
     ifcdevice->set_led               = adc3110_set_led;

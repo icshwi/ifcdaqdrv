@@ -40,13 +40,13 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #define DEBUG 1
 #endif /* NDEBUG */
 
-#define SRAM_DMA
+//#define SRAM_DMA
 #define ENABLE_TRACE_IOC
 #define NENABLE_TRACE_SERIAL
 
 #define SMEM_MODE_ENABLED
 
-// #define ENABLE_I2C
+#define ENABLE_I2C
 
 #define I2C_CTL_EXEC_IDLE 0x00000000
 #define I2C_CTL_EXEC_RUN  0x00100000

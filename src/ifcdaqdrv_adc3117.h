@@ -114,7 +114,7 @@ ifcdaqdrv_status adc3117_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, s
 
 ifcdaqdrv_status adc3117_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                        uint16_t *board_id);
-ifcdaqdrv_status adc3117_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max);
+ifcdaqdrv_status adc3117_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max);
 
 ifcdaqdrv_status adc3117_set_adc_channel(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel);
 ifcdaqdrv_status adc3117_get_adc_channel(struct ifcdaqdrv_dev *ifcdevice, uint32_t *channel);
@@ -126,6 +126,11 @@ ifcdaqdrv_status adc3117_set_adc_channel_negative_input(struct ifcdaqdrv_dev *if
 ifcdaqdrv_status adc3117_get_adc_channel_negative_input(struct ifcdaqdrv_dev *ifcdevice, uint8_t *input);
 ifcdaqdrv_status adc3117_set_adc_channel_positive_input(struct ifcdaqdrv_dev *ifcdevice, uint8_t input);
 ifcdaqdrv_status adc3117_get_adc_channel_positive_input(struct ifcdaqdrv_dev *ifcdevice, uint8_t *input);
+
+ifcdaqdrv_status adc3117_set_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double sample_rate);
+ifcdaqdrv_status adc3117_get_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double *sample_rate);
+
+ifcdaqdrv_status adc3117_fmc_reinit(struct ifcdaqdrv_dev *ifcdevice);
 
 ifcdaqdrv_status adc3117_configuration_command(struct ifcdaqdrv_dev *ifcdevice);
 #endif // _IFC_ADC3117_H_

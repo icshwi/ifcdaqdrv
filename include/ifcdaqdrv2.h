@@ -16,7 +16,7 @@ extern "C" {
 #define IFC1210SCOPEDRV_SCOPE_SIGNATURE       0x12110301 // IFC1410
 #define IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE   0x12100501
 #define IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE 0x12101201
-
+#define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x73570001
 
 /**
  * @brief Enumeration of possible error codes.
@@ -593,8 +593,12 @@ typedef enum {
 
 ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider);
 
+ifcdaqdrv_status ifcdaqdrv_set_sample_rate(struct ifcdaqdrv_usr *ifcuser, double sample_rate);
+ifcdaqdrv_status ifcdaqdrv_get_sample_rate(struct ifcdaqdrv_usr *ifcuser, double *sample_rate);
 
+ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
 
+ifcdaqdrv_status ifcdaqdrv_send_configuration_command(struct ifcdaqdrv_usr *ifcuser);
 
 #ifdef __cplusplus
 }
