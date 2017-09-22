@@ -80,6 +80,7 @@ struct ifcdaqdrv_dev {
     struct fmc_fru_id *fru_id;
     uint32_t           tosca_signature; /**< Device type */
     uint32_t           app_signature;   /**< App type */
+    uint16_t           board_id;        /**< FMC board id*/
 
     int                (*init_adc)(struct ifcdaqdrv_dev *ifcdevice);
     int                (*get_signature)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
@@ -124,7 +125,9 @@ struct ifcdaqdrv_dev {
     int                (*get_adc_channel_positive_input)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *input);
     int                (*set_offset)(struct ifcdaqdrv_dev *ifcdevice, uint16_t offset);
     int                (*get_offset)(struct ifcdaqdrv_dev *ifcdevice, uint16_t *offset);
-    int                (*adc_configuration_command)(struct ifcdaqdrv_dev *ifcdevice); /* Transfer configuration bits to all devices */
+    int                (*set_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double sample_rate);
+    int                (*get_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double *sample_rate);
+    int                (*configuration_command)(struct ifcdaqdrv_dev *ifcdevice); /* Transfer configuration bits to all devices */
 
     ifcdaqdrv_acq_store_mode mode;           /**< In which memory to store acquistition SRAM/SMEM */
     ifcdaqdrv_trigger_type   trigger_type;

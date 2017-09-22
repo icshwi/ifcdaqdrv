@@ -19,6 +19,7 @@
 #include "ifcdaqdrv_scope.h"
 // #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
+#include "ifcdaqdrv_adc3117.h"
 // #include "ifcdaqdrv_adc3112.h"
 //typedef long dma_addr_t;
 
@@ -35,19 +36,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
             adc3110_register(ifcdevice);
         } else if (strcmp(p, "ADC3111") == 0) {
             LOG((5, "Identified ADC3111\n"));
-            //adc3111_register(ifcdevice);
-
-            /* TODO: Signature is ADC3111 but board is ADC3110 */
-            adc3110_register(ifcdevice);
+            adc3111_register(ifcdevice);
         } else if (strcmp(p, "ADC3112") == 0) {
             LOG((5, "No support for ADC3112 yet\n"));
             return status_incompatible;
+        } else if (strcmp(p, "ADC3117") == 0) {
+            LOG((5, "Identified ADC3117\n"));
+            adc3117_register(ifcdevice);
         } else {
             LOG((5, "No recognized device %s\n", p));
             return status_incompatible;
         }
-
- 
     } else {
         LOG((4, "Internal error, no product_name\n"));
         return status_internal;
@@ -496,20 +495,19 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
     uint32_t              last_address = 0, nsamples = 0, npretrig = 0, ptq = 0;
     uint32_t channel;
 
+    if (ifcdevice->get_nsamples)
+        ifcdevice->get_nsamples(ifcdevice, &nsamples);
+    else
+        return status_no_support;
+
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
-        ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
         for(channel = 0; channel < ifcdevice->nchannels; ++channel) {
             ifcdevice->read_ai_ch(ifcdevice, channel, ((int32_t *)data) + nsamples * channel);
         }
         break;
     case ifcdaqdrv_acq_mode_smem:
         offset = 0;
-
-        status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
-        if (status) {
-            return status_device_access;
-        }
 
         ifcdaqdrv_start_tmeas();
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->nchannels * ifcdevice->sample_size);
@@ -602,15 +600,17 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     npretrig = 0;
     ptq = 0;
 
-
+    if (ifcdevice->get_nsamples)
+        ifcdevice->get_nsamples(ifcdevice, &nsamples);
+    else
+        return status_no_support;
 
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
-        offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
-
-        status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
-        if (status) {
-            return status;
+        if (ifcdevice->board_id == 0x3117) {
+            offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 12);
+        } else {
+            offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
         }
 
 #ifdef SRAM_DMA
@@ -665,11 +665,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         }
 #endif
         offset = 0;
-
-        status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
-        if (status) {
-            return status_device_access;
-        }
 
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->sample_size);
         if (status) {
@@ -762,10 +757,20 @@ ifcdaqdrv_status ifcdaqdrv_scope_read(struct ifcdaqdrv_dev *ifcdevice, void *dst
     target = ((int32_t *)dst) + dst_offset;
     origin = ((int16_t *)src) + src_offset * ifcdevice->nchannels;
 
-    for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; target += 2, itr += (ifcdevice->nchannels * 2)) {
-        for (channel = 0; channel < ifcdevice->nchannels; channel++) {
-            *((target + 0) + channel * channel_nsamples) = (int16_t)(*(itr + channel * 2) - 32768);
-            *((target + 1) + channel * channel_nsamples) = (int16_t)(*(itr + (channel * 2 + 1)) - 32768);
+    if (ifcdevice->board_id == 0x3117) {
+        for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; target += 2, itr += (ifcdevice->nchannels * 2)) {
+            for (channel = 0; channel < ifcdevice->nchannels; channel++) {
+                *((target + 0) + channel * channel_nsamples) = (int16_t)*(itr + channel * 2);
+                *((target + 1) + channel * channel_nsamples) = (int16_t)*(itr + (channel * 2 + 1));
+            }
+        }
+    }
+    else {
+        for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; target += 2, itr += (ifcdevice->nchannels * 2)) {
+            for (channel = 0; channel < ifcdevice->nchannels; channel++) {
+                *((target + 0) + channel * channel_nsamples) = (int16_t)(*(itr + channel * 2) - 32768);
+                *((target + 1) + channel * channel_nsamples) = (int16_t)(*(itr + (channel * 2 + 1)) - 32768);
+            }
         }
     }
     return status_success;
@@ -773,20 +778,33 @@ ifcdaqdrv_status ifcdaqdrv_scope_read(struct ifcdaqdrv_dev *ifcdevice, void *dst
 
 ifcdaqdrv_status ifcdaqdrv_scope_read_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *res, void *data, size_t offset,
                               size_t nelm) {
-    UNUSED(ifcdevice);
     int16_t *origin = (int16_t *)data + offset;
     int16_t *itr;
     int32_t *target = res;
 
     if(ifcdevice->mode == ifcdaqdrv_acq_mode_smem) {
-        for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; ++target, itr += ifcdevice->nchannels) {
-            *target = (int16_t)(*(itr + channel) - 32768);
+        if (ifcdevice->board_id == 0x3117) {
+            for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; ++target, itr += ifcdevice->nchannels) {
+                *target = (int16_t)*(itr + channel);
+            }
+        }
+        else {
+            for (itr = origin; itr < origin + nelm * ifcdevice->nchannels; ++target, itr += ifcdevice->nchannels) {
+                *target = (int16_t)(*(itr + channel) - 32768);
+            }
         }
         return status_success;
     }
 
-    for (itr = origin; itr < origin + nelm; ++target, ++itr) {
-        *target = (int16_t)(*itr - 32768);
+    if (ifcdevice->board_id == 0x3117) {
+        for (itr = origin; itr < origin + nelm; ++target, ++itr) {
+            *target = (int16_t)(*itr);
+        }
+    }
+    else {
+        for (itr = origin; itr < origin + nelm; ++target, ++itr) {
+            *target = (int16_t)(*itr - 32768);
+        }
     }
 
     return status_success;
@@ -969,19 +987,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
         return status_config;
     }
 
-    switch(ifcdevice->mode){
-    case ifcdaqdrv_acq_mode_sram:
-        status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
-        break;
-    case ifcdaqdrv_acq_mode_smem:
-        status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
-        break;
-    default:
-        return status_internal;
-    }
-    if (status) {
-        return status;
-    }
+    if (ifcdevice->get_nsamples)
+        ifcdevice->get_nsamples(ifcdevice, &nsamples);
+    else
+        return status_no_support;
 
     ptq = (npretrig * 8) / nsamples;
     if (ptq > 7 || (npretrig * 8) % nsamples != 0) {
@@ -995,19 +1004,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
     ifcdaqdrv_status      status;
     uint32_t              nsamples, ptq;
 
-    switch(ifcdevice->mode){
-    case ifcdaqdrv_acq_mode_sram:
-        status = ifcdaqdrv_scope_get_sram_nsamples(ifcdevice, &nsamples);
-        break;
-    case ifcdaqdrv_acq_mode_smem:
-        status = ifcdaqdrv_scope_get_smem_nsamples(ifcdevice, &nsamples);
-        break;
-    default:
-        return status_internal;
-    }
-    if (status) {
-        return status;
-    }
+    if (ifcdevice->get_nsamples)
+        ifcdevice->get_nsamples(ifcdevice, &nsamples);
+    else
+        return status_no_support;
 
     nsamples /= 8;
 
