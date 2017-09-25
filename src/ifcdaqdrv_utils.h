@@ -51,6 +51,7 @@ typedef enum {
  *
  * The ADC3110 maps fmc0 to frontpanel led and fmc1 to rear side PCB led.
  * The DTACQ doesn't have any FMC led.
+ * The ADC3117 maps fmc0 to frontpanel green led and fmc1 to frontpanel red led.
  */
 
 typedef enum {
@@ -79,6 +80,7 @@ struct ifcdaqdrv_dev {
     struct fmc_fru_id *fru_id;
     uint32_t           tosca_signature; /**< Device type */
     uint32_t           app_signature;   /**< App type */
+    uint16_t           board_id;        /**< FMC board id*/
 
     int                (*init_adc)(struct ifcdaqdrv_dev *ifcdevice);
     int                (*get_signature)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
@@ -112,6 +114,20 @@ struct ifcdaqdrv_dev {
                                size_t nelm, size_t channel_nsamples); /* Convert all channels' raw data into standardized int32_t */
 
     int                (*mode_switch)(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_acq_store_mode mode);           /**< Switch between SRAM and SMEM */
+
+    int                (*set_adc_channel)(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel); /* Select adc channel */
+    int                (*get_adc_channel)(struct ifcdaqdrv_dev *ifcdevice, uint32_t *channel); /* Get adc channel */
+    int                (*set_adc_channel_mask)(struct ifcdaqdrv_dev *ifcdevice, uint32_t mask); /* Set adc channel mask */
+    int                (*get_adc_channel_mask)(struct ifcdaqdrv_dev *ifcdevice, uint32_t *mask); /* Get adc channel mask */
+    int                (*set_adc_channel_negative_input)(struct ifcdaqdrv_dev *ifcdevice, uint8_t input);
+    int                (*get_adc_channel_negative_input)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *input);
+    int                (*set_adc_channel_positive_input)(struct ifcdaqdrv_dev *ifcdevice, uint8_t input);
+    int                (*get_adc_channel_positive_input)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *input);
+    int                (*set_offset)(struct ifcdaqdrv_dev *ifcdevice, uint16_t offset);
+    int                (*get_offset)(struct ifcdaqdrv_dev *ifcdevice, uint16_t *offset);
+    int                (*set_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double sample_rate);
+    int                (*get_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double *sample_rate);
+    int                (*configuration_command)(struct ifcdaqdrv_dev *ifcdevice); /* Transfer configuration bits to all devices */
 
     ifcdaqdrv_acq_store_mode mode;           /**< In which memory to store acquistition SRAM/SMEM */
     ifcdaqdrv_trigger_type   trigger_type;
