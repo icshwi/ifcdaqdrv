@@ -544,7 +544,10 @@ ifcdaqdrv_status adc3117_get_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double
     int32_t i32_reg_val;
 
     status = ifc_scope_tcsr_read(ifcdevice, 0x2, &i32_reg_val);
-    *sample_rate = 105000000 / ((i32_reg_val >> 16) + 1);
+    if ((i32_reg_val >> 16) == 0)
+        *sample_rate = 5000000;
+    else
+        *sample_rate = 105000000 / ((i32_reg_val >> 16) + 1);
 
     return status;
 }
