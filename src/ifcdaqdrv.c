@@ -21,6 +21,9 @@
 #include "ifcfastintdrv.h"
 #include "ifcfastintdrv_utils.h"
 
+#define IFC1410_FMC_EN_DATA   0xC0000000
+#define IFC1410_FMC_EN_OFFSET 0x000C
+
 LIST_HEAD(ifcdaqdrv_devlist);
 pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -34,8 +37,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     int                   node; /* TOSCA file descriptor */
     int32_t               i32_reg_val;
     struct ifcdaqdrv_dev *ifcdevice;
-
-
+    int                   data = IFC1410_FMC_EN_DATA;
 
     if (!ifcuser || ifcuser->card >= MAX_PEV_CARDS || (ifcuser->fmc != 1 && ifcuser->fmc != 2)) {
         return status_argument_invalid;
@@ -192,6 +194,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     default:
         break;
     }
+
+    tsc_pon_write(IFC1410_FMC_EN_OFFSET, &data);
 
     /* Add device to the list of opened devices */
     list_add_tail(&ifcdevice->list, &ifcdaqdrv_devlist);
