@@ -20,6 +20,7 @@
 // #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
+#include "ifcdaqdrv_dio3118.h"
 // #include "ifcdaqdrv_adc3112.h"
 //typedef long dma_addr_t;
 
@@ -43,7 +44,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         } else if (strcmp(p, "ADC3117") == 0) {
             LOG((5, "Identified ADC3117\n"));
             adc3117_register(ifcdevice);
-        } else {
+        } else if (strcmp(p, "DIO3118") == 0) {
+            LOG((5, "Identified DIO3118\n"));
+            dio3118_register(ifcdevice);
+        }else {
             LOG((5, "No recognized device %s\n", p));
             return status_incompatible;
         }

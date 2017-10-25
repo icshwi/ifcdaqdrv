@@ -176,9 +176,11 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         if(status) {
             goto err_dev_alloc;
         }
-        status = ifcdaqdrv_dma_allocate(ifcdevice);
-        if(status) {
-            goto err_read;
+        if (ifcdevice->board_id != 0x3118) {
+            status = ifcdaqdrv_dma_allocate(ifcdevice);
+            if(status) {
+                goto err_read;
+            }
         }
         break;
     case IFC1210FASTINT_APP_SIGNATURE:
