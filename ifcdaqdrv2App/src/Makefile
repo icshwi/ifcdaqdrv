@@ -16,14 +16,16 @@ DBD += ifcdaqdrv2.dbd
 ifcdaqdrv2_DBD += debugEpics.dbd
 
 # specify all source files to be compiled and added to the library
-ifcdaqdrv2_SRCS += debugEpics.c ifcdaqdrv_adc3110.c ifcdaqdrv.c ifcdaqdrv_fmc.c 
-ifcdaqdrv2_SRCS += ifcdaqdrv_scope.c ifcdaqdrv_utils.c
+ifcdaqdrv2_SRCS += debugEpics.c ifcdaqdrv_acq420.c ifcdaqdrv_adc3110.c ifcdaqdrv_adc3112.c ifcdaqdrv_adc3117.c
+ifcdaqdrv2_SRCS += ifcdaqdrv.c ifcdaqdrv_fmc.c ifcdaqdrv_scope.c ifcdaqdrv_utils.c
+ifcdaqdrv2_SRCS += ifcfastintdrv.c ifcfastintdrv_utils.c
 
 # tsclib should be defined in configure/RELEASE
 ifcdaqdrv2_LIBS += tsclib
 ifcdaqdrv2_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 INC += ifcdaqdrv2.h
+INC += ifcfastintdrv.h
 
 #===========================
 

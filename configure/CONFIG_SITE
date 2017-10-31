@@ -23,8 +23,7 @@ CROSS_COMPILER_TARGET_ARCHS = linux-ppc64e6500
 
 # To install files into a location other than $(TOP) define
 #   INSTALL_LOCATION here.
-INSTALL_LOCATION=/opt/vsee/external/ifcdaqdrv2/0.0.1
-#INSTALL_LOCATION=/home/joaopaulomartins/epicsdev/external_sources/ifcdaqdrv2/install
+INSTALL_LOCATION=$(LITEEE_INSTALL)/$(LITEEE_BASE)/modules/ifcdaqdrv2/0.0.1
 
 # Set this when the IOC and build host use different paths
 #   to the install location. This may be needed to boot from

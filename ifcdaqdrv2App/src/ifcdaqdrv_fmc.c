@@ -13,6 +13,26 @@
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 
+ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_t *data){
+    int32_t  status, i;
+    uint32_t device = 0x40010050;
+    uint32_t reg_val;
+
+    if (!data) {
+        return status_argument_invalid;
+    }
+
+    if (ifcdevice->fmc == 2) {
+        device |= 2;
+    }
+
+    for (i = 0; i < 8; i++) {
+        status = tsc_i2c_read(device, 0x7000 + i, &reg_val);
+        data[i] = (uint8_t)reg_val;
+    }
+
+    return status;
+}
 
 ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t address, uint8_t *data){
     int  status = 0;

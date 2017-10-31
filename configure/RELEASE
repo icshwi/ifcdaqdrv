@@ -23,10 +23,11 @@
 # the CONFIG_SITE file.
 
 # Variables and paths to dependent modules:
-TSCLIB = /opt/vsee/external/tsclib/1.2.1
+SUPPORT=$(LITEEE_INSTALL)/$(LITEEE_BASE)/modules
+TSCLIB = $(SUPPORT)/tsclib/1.2.1
 
 # EPICS_BASE should appear last so earlier modules can override stuff:
-EPICS_BASE = /opt/vsee/bases/3.16.1
+EPICS_BASE=$(LITEEE_INSTALL)/$(LITEEE_BASE)/base
 
 # Set RULES here if you want to use build rules from somewhere
 # other than EPICS_BASE:

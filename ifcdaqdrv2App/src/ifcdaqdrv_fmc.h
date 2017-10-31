@@ -49,6 +49,6 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_string(struct ifcdaqdrv_dev *ifcdevice, uin
 ifcdaqdrv_status ifc_fmc_eeprom_read_fru(struct ifcdaqdrv_dev *ifcdevice, struct fmc_fru_id *fru_id);
 ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t address, uint8_t *data);
 
-
+ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_t *data);
 
 #endif // _IFC1210SCOPEDRV_FMC_H_

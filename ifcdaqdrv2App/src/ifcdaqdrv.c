@@ -17,6 +17,12 @@
 #include "ifcdaqdrv_scope.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
+#include "ifcdaqdrv_adc3117.h"
+#include "ifcfastintdrv.h"
+#include "ifcfastintdrv_utils.h"
+
+#define IFC1410_FMC_EN_DATA   0xC0000000
+#define IFC1410_FMC_EN_OFFSET 0x000C
 
 LIST_HEAD(ifcdaqdrv_devlist);
 pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -31,8 +37,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     int                   node; /* TOSCA file descriptor */
     int32_t               i32_reg_val;
     struct ifcdaqdrv_dev *ifcdevice;
-
-
+    int                   data = IFC1410_FMC_EN_DATA;
 
     if (!ifcuser || ifcuser->card >= MAX_PEV_CARDS || (ifcuser->fmc != 1 && ifcuser->fmc != 2)) {
         return status_argument_invalid;
@@ -115,10 +120,10 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         LOG((5, "Generic DAQ Application\n"));
         /* Recognized scope implementation. */
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     LOG((5, "Fast Interlock Application\n"));
-    //     /* Recognized fast interlock implementation */
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        LOG((5, "Fast Interlock Application\n"));
+        /* Recognized fast interlock implementation */
+        break;
     default:
         // Skip all signature verification for now...
         //status = status_incompatible;
@@ -126,9 +131,6 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         break;
     }
     ifcdevice->app_signature = i32_reg_val;
-
-    /* Activate FMC */
-    status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
 
 #if DEBUG
     printf("TOSCA signature: %08x, APP signature: %08x, ", ifcdevice->tosca_signature, ifcdevice->app_signature);
@@ -150,25 +152,15 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         goto err_read;
     }
 
-    /* ifc_fmc_eeprom_read_fru will allocate two char arrays that have to be freed by us. */
-#ifdef ENABLE_I2C
-
-    printf("Trying to read EEPROM \n");
-
-    status = ifc_fmc_eeprom_read_fru(ifcdevice, ifcdevice->fru_id);
-    if (status == status_fru_info_invalid) {
-        /* .... fall back to IOxOS proprietary signature */
-        printf("EEPROM invalid, fallback to ioxos signature\n");
-        status = ifc_read_ioxos_signature(ifcdevice, ifcdevice->fru_id);
-        if (status) {
-            status = status_internal;
-            goto err_read;
-        }
-    } else if (status) {
-    	printf("ifc_fmc_eeprom_read_fru returned %d\n", status);
+    ifcdevice->fru_id->product_name = calloc(1, sizeof(uint8_t)*8);
+    if (!ifcdevice->fru_id->product_name) {
         status = status_internal;
         goto err_read;
     }
+
+#ifdef ENABLE_I2C
+    printf("Trying to read EEPROM \n");
+    ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
 #endif
     
     /*
@@ -179,6 +171,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
+    case IFC1410SCOPEDRV_SCOPE_SIGNATURE:
         status = ifcdaqdrv_scope_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
@@ -188,19 +181,21 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
             goto err_read;
         }
         break;
-    // case IFC1210FASTINT_APP_SIGNATURE:
-    //     status = ifcfastintdrv_register(ifcdevice);
-    //     if(status) {
-    //         goto err_dev_alloc;
-    //     }
-    //     status = ifcfastintdrv_dma_allocate(ifcdevice);
-    //     if(status) {
-    //         goto err_read;
-    //     }
-    //     break;
+    case IFC1210FASTINT_APP_SIGNATURE:
+        status = ifcfastintdrv_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+        status = ifcfastintdrv_dma_allocate(ifcdevice);
+        if(status) {
+            goto err_read;
+        }
+        break;
     default:
         break;
     }
+
+    tsc_pon_write(IFC1410_FMC_EN_OFFSET, &data);
 
     /* Add device to the list of opened devices */
     list_add_tail(&ifcdevice->list, &ifcdaqdrv_devlist);
@@ -308,18 +303,29 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     }
 #endif
 
-    /* ACQ_CLKERR returns HIGH when we first try to ARM the device, and then LOW 
-     * on the subsequent execution. This is a iterative verification with 100 ms timeout 
-     */
-    
-    for (i = 0; i < 5; i++)
-    {
-        status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-        if ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_CLKERR_MASK) == 0) 
+    if (ifcdevice->board_id == 0x3117) {
+        for (i = 0; i < 5; i++)
         {
-            break;
+            status = ifc_scope_tcsr_read(ifcdevice, 0x5, &i32_reg_val);
+            if ((i32_reg_val & 0x3) == 0x3) // Clock ready and init done
+            {
+                break;
+            }
+            usleep(20000);
         }
-        usleep(20000);
+    } else {
+        /* ACQ_CLKERR returns HIGH when we first try to ARM the device, and then LOW
+         * on the subsequent execution. This is a iterative verification with 100 ms timeout
+         */
+        for (i = 0; i < 5; i++)
+        {
+            status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
+            if ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_CLKERR_MASK) == 0)
+            {
+                break;
+            }
+            usleep(20000);
+        }
     }
 
     /* if the "for" didn't break, then ACQ_CLKERR is still HIGH, which means that clock is not locked */
@@ -334,49 +340,57 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
 
     /* Arm device */
     // printf(" ############################## Arming device ######################################### \n");
-    status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 1 << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT, 0);
+    if (ifcdevice->board_id == 0x3117) {
+        status = ifc_scope_tcsr_write(ifcdevice, 0x1, 0xFFFFF000);
+        status += ifc_scope_tcsr_write(ifcdevice, 0x2, 0x2);
+        status += ifc_scope_tcsr_write(ifcdevice, 0x8, 0xFFFFF000);
+        status += ifc_scope_tcsr_write(ifcdevice, 0x9, 0x2);
+        if (status)
+            return status_device_access;
+    } else {
+        status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 1 << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT, 0);
 
-    /* If software trigger is selected, try manually trigger. */
-    if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft) {
+        /* If software trigger is selected, try manually trigger. */
+        if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft) {
+            /* Estimate time to complete sample */
+            double acquisition_time;
+            double frequency;
+            uint32_t divisor;
+            uint32_t nsamples;
+            uint32_t average;
+            uint32_t decimation;
+            int32_t timeo;
+            ifcdevice->get_clock_frequency(ifcdevice, &frequency);
+            ifcdevice->get_clock_divisor(ifcdevice, &divisor);
+            ifcdevice->get_nsamples(ifcdevice, &nsamples);
+            ifcdaqdrv_scope_get_average(ifcdevice, &average);
+            ifcdaqdrv_get_decimation(ifcuser, &decimation);
 
-        /* Estimate time to complete sample */
-        double acquisition_time;
-        double frequency;
-        uint32_t divisor;
-        uint32_t nsamples;
-        uint32_t average;
-        uint32_t decimation;
-        int32_t timeo;
-        ifcdevice->get_clock_frequency(ifcdevice, &frequency);
-        ifcdevice->get_clock_divisor(ifcdevice, &divisor);
-        ifcdevice->get_nsamples(ifcdevice, &nsamples);
-        ifcdaqdrv_scope_get_average(ifcdevice, &average);
-        ifcdaqdrv_get_decimation(ifcuser, &decimation);
-
-        acquisition_time = ((nsamples * average * decimation) / (frequency / divisor));
-        /* Poll for the expected acquisition time before giving up */
-        timeo = SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6);
+            acquisition_time = ((nsamples * average * decimation) / (frequency / divisor));
+            /* Poll for the expected acquisition time before giving up */
+            timeo = SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6);
 
 #ifdef DEBUG
-        //LOG((6, "%f %d iterations\n", acquisition_time, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
+            //LOG((6, "%f %d iterations\n", acquisition_time, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
 #endif
+            do {
+                status  = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_LA_REG, 1 << IFC_SCOPE_TCSR_LA_Spec_CMD_SHIFT);
+                usleep(ifcdevice->poll_period);
+                status |= ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
+            } while (!status && ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT) < 2 && timeo-- > 0);
 
-        do {
-            status  = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_LA_REG, 1 << IFC_SCOPE_TCSR_LA_Spec_CMD_SHIFT);
-            usleep(ifcdevice->poll_period);
-            status |= ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-        } while (!status && ((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT) < 2 && timeo-- > 0);
+            if (status) {
+                pthread_mutex_unlock(&ifcdevice->lock);
+                return status_device_access;
+            }
 
-        if (status) {
-            pthread_mutex_unlock(&ifcdevice->lock);
-            return status_device_access;
-        }
+            if(((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT) < 2) {
+                // Failed to self-trigger.
+                LOG((6, "CS register value is %08x after %d iterations\n", i32_reg_val, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
+                pthread_mutex_unlock(&ifcdevice->lock);
+                return status_internal;
+            }
 
-        if(((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT) < 2) {
-            // Failed to self-trigger.
-            LOG((6, "CS register value is %08x after %d iterations\n", i32_reg_val, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
-            pthread_mutex_unlock(&ifcdevice->lock);
-            return status_internal;
         }
     }
 
@@ -401,43 +415,47 @@ ifcdaqdrv_status ifcdaqdrv_disarm_device(struct ifcdaqdrv_usr *ifcuser){
 
     pthread_mutex_lock(&ifcdevice->lock);
 
-    /* Set "Acquisition STOP/ABORT" bit and "ACQ mode single" bit. Single
-     * mode has to be set to disable a continuous acquisition. */
-    status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0,
+    if (ifcdevice->board_id == 0x3117) {
+        ifc_scope_tcsr_write(ifcdevice, 0x9, 0x4);
+        ifc_scope_tcsr_write(ifcdevice, 0x2, 0x0);
+    } else {
+        /* Set "Acquisition STOP/ABORT" bit and "ACQ mode single" bit. Single
+         * mode has to be set to disable a continuous acquisition. */
+        status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0,
                                        IFC_SCOPE_TCSR_CS_ACQ_Command_VAL_ABORT << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT
                                        | IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE,
                                        IFC_SCOPE_TCSR_CS_ACQ_Command_MASK);
-    if (status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_device_access;
-    }
+        if (status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_device_access;
+        }
 
-    status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
+        status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
 
-    if(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) {
-        // If ACQ_Status hasn't gone to idle (0) disarming failed.
-        // Try ten times to disarm the board and then report internal error.
-        for(i = 0; i < 10; ++i) {
-            status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0,
+        if(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) {
+            // If ACQ_Status hasn't gone to idle (0) disarming failed.
+            // Try ten times to disarm the board and then report internal error.
+            for(i = 0; i < 10; ++i) {
+                status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0,
                                                IFC_SCOPE_TCSR_CS_ACQ_Command_VAL_ABORT << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT
                                                | IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE,
                                                IFC_SCOPE_TCSR_CS_ACQ_Command_MASK);
-            if (status) {
-                pthread_mutex_unlock(&ifcdevice->lock);
-                return status_device_access;
+                if (status) {
+                    pthread_mutex_unlock(&ifcdevice->lock);
+                    return status_device_access;
+                }
+                status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
+                if(!(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK)) {
+                    goto disarm_success;
+                }
             }
-            status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
-            if(!(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK)) {
-                goto disarm_success;
-            }
-        }
 
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
     }
 
 disarm_success:
-
     ifcdevice->armed = 0;
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
@@ -459,16 +477,22 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
     if (!ifcdevice) {
         return status_no_device;
     }
-    
-    do {
+
+    if (ifcdevice->board_id == 0x3117) {
+        do {
+            status = ifc_scope_tcsr_read(ifcdevice, 0x2, &i32_reg_val);
+            usleep(ifcdevice->poll_period);
+        } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00080000) != 0x0));
+    } else {
+        do {
        
-        status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
+            status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
 	    //printf("TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val);
-        //usleep(ifcdevice->poll_period);
-    
-    } while (!status && ifcdevice->armed && (
+            //usleep(ifcdevice->poll_period);
+        } while (!status && ifcdevice->armed && (
                 (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT !=
                   IFC_SCOPE_TCSR_CS_ACQ_Status_VAL_DONE));
+    }
 
     if (!ifcdevice->armed) {
         return status_cancel;
@@ -1213,6 +1237,9 @@ ifcdaqdrv_status ifcdaqdrv_get_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     if (!nsamples) {
         return status_argument_invalid;
     }
+    if(!ifcdevice->get_nsamples) {
+        return status_no_support;
+    }
     return ifcdevice->get_nsamples(ifcdevice, nsamples);
 }
 
@@ -1223,10 +1250,15 @@ ifcdaqdrv_status ifcdaqdrv_get_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
 ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
-    ifcdevice = ifcuser->device;
 
+    ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
+    }
+
+    if (ifcdevice->board_id == 0x3117) {
+        LOG((7, "Not valid operation on ADC3117\n"));
+        return status_success; //Maybe return status_no_support?
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
@@ -1253,6 +1285,13 @@ ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     if (!ifcdevice) {
         return status_no_device;
     }
+
+    if (ifcdevice->board_id == 0x3117) {
+        LOG((7, "Not valid operation on ADC3117\n"));
+        *npretrig = 0;
+        return status_success; //Maybe return status_no_support?
+    }
+
     if (!npretrig) {
         return status_argument_invalid;
     }
@@ -1358,6 +1397,89 @@ ifcdaqdrv_status ifcdaqdrv_get_resolution(struct ifcdaqdrv_usr *ifcuser, uint32_
 
     *resolution = ifcdevice->sample_resolution;
     return status_success;
+}
+
+/*
+ * Set sample rate
+ */
+
+ifcdaqdrv_status ifcdaqdrv_set_sample_rate(struct ifcdaqdrv_usr *ifcuser, double sample_rate) {
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if (!ifcdevice->set_sample_rate) {
+        return status_internal;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    if (ifcdevice->armed) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_device_armed;
+    }
+
+    status = ifcdevice->set_sample_rate(ifcdevice, sample_rate);
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+/*
+ * Get sample rate
+ */
+
+ifcdaqdrv_status ifcdaqdrv_get_sample_rate(struct ifcdaqdrv_usr *ifcuser, double *sample_rate) {
+    struct ifcdaqdrv_dev *ifcdevice;
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if (ifcdevice->board_id != 0x3117) {
+        /* This should be moved to ADC3110 driver */
+        double clock_frequency;
+        uint32_t clock_divisor;
+        ifcdaqdrv_get_clock_frequency(ifcuser, &clock_frequency);
+        ifcdaqdrv_get_clock_divisor(ifcuser, &clock_divisor);
+        *sample_rate = clock_frequency/clock_divisor;
+        return status_success;
+    }
+
+    if (!ifcdevice->get_sample_rate) {
+        return status_internal;
+    }
+
+    return ifcdevice->get_sample_rate(ifcdevice, sample_rate);
+}
+
+ifcdaqdrv_status ifcdaqdrv_send_configuration_command(struct ifcdaqdrv_usr *ifcuser) {
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if (!ifcdevice->configuration_command) {
+        return status_internal;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    if (ifcdevice->armed) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_device_armed;
+    }
+
+    status = ifcdevice->configuration_command(ifcdevice);
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
 }
 
 /*
@@ -1630,4 +1752,158 @@ ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqd
     return status;
 }
 
+#define MAX_SAMPLE_RATES 100
+
+struct sample_rate {
+    double   frequency;
+    int32_t divisor;
+    int32_t decimation;
+    int32_t average;
+    double   sample_rate;
+};
+
+// First priority is sample_rate, second divisor
+static int compare_sample_rates(const void *a, const void *b) {
+    const struct sample_rate *da = (const struct sample_rate *) a;
+    const struct sample_rate *db = (const struct sample_rate *) b;
+    int32_t sample_diff = (da->sample_rate > db->sample_rate) - (da->sample_rate < db->sample_rate);
+    if(!sample_diff) {
+        return da->divisor - db->divisor;
+    }
+    return sample_diff;
+}
+
+ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed) {
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if ((ifcdevice->board_id == 0x3117) && (sample_rate_changed == 1)) {
+        status = ifcdaqdrv_set_sample_rate(ifcuser, *sample_rate);
+    }
+    else if ((ifcdevice->board_id == 0x3117) && (sample_rate_changed == 0)) {
+        return status_success;
+    }
+    else {
+        if (!sample_rate_changed) {
+            *sample_rate = *freq / *divisor / *averaging / *decimation;
+            return status_success;
+        } else {
+            struct sample_rate sample_rates[MAX_SAMPLE_RATES] = {};
+            double   frequencies[5];
+            size_t nfrequencies;
+            uint32_t decimations[8];
+            size_t ndecimations;
+            uint32_t averages[8];
+            size_t naverages;
+            uint32_t *downsamples;
+            size_t ndownsamples;
+            uint32_t  divisor_tmp, div_min, div_max;
+            uint32_t i, j, nsample_rates;
+            int32_t k;
+            double sample_rate_tmp;
+
+            status = ifcdaqdrv_get_clock_divisor_range(ifcuser, &div_min, &div_max);
+            status += ifcdaqdrv_get_clock_frequencies_valid(ifcuser, frequencies, sizeof(frequencies)/sizeof(double), &nfrequencies);
+            status += ifcdaqdrv_get_decimations_valid(ifcuser, decimations, sizeof(decimations)/sizeof(uint32_t), &ndecimations);
+            status += ifcdaqdrv_get_averages_valid(ifcuser, averages, sizeof(averages)/sizeof(uint32_t), &naverages);
+            if (status) {
+                LOG((5, "Getting values failed\n"));
+                return status_device_access;
+            }
+
+            /*
+             * Try to find the combination of clock frequency, clock divisor, decimation and average which
+             * is closest (but higher) to the requested sample rate.
+             *
+             * The algorithm is as follows:
+             * 1. For every available clock frequency
+             *      For every available downsample (decimation and average)
+             *         Start with the highest divisor and test all divisors until there is a sample rate higher than requested.
+             *         If such a sample rate is found, add it to the list of sample rates.
+             * 2. Sort list of sample rates. Lowest sample rate first. If equal prioritize lowest clock divisor.
+             * 3. Pick the first combination in the list.
+             */
+
+            nsample_rates = 0;
+            for(i = 0; i < nfrequencies; ++i) {
+                for(j = 0; j < 2; ++j) {
+                    if (j == 0) {
+                        downsamples = decimations;
+                        ndownsamples = ndecimations;
+                    } else {
+                        downsamples = averages;
+                        ndownsamples = naverages;
+                    }
+                    for(k = ndownsamples - 1; k >= 0 ; --k) {
+                        sample_rates[nsample_rates].frequency = frequencies[i];
+                        sample_rates[nsample_rates].divisor = div_min;
+                        sample_rates[nsample_rates].sample_rate = frequencies[i] / downsamples[k] / div_min;
+                        sample_rates[nsample_rates].decimation = 1;
+                        sample_rates[nsample_rates].average = 1;
+                        for(divisor_tmp = div_max; divisor_tmp >= div_min; --divisor_tmp) {
+                            sample_rate_tmp = frequencies[i] / downsamples[k] / divisor_tmp;
+                            /*ndsDebugStream(m_node) << "Try Frequency: " << frequencies[i]
+                                                   << ", Divisor: "     << divisor
+                                                   << ", Downsample: "  << downsamples[i]
+                                                   << " : "             << sample_rate_tmp << std::endl;*/
+                            if(sample_rate_tmp >= *sample_rate) {
+                                sample_rates[nsample_rates].frequency = frequencies[i];
+                                sample_rates[nsample_rates].divisor = divisor_tmp;
+                                sample_rates[nsample_rates].sample_rate = sample_rate_tmp;
+                                if(j == 0) {
+                                    sample_rates[nsample_rates].decimation = downsamples[k];
+                                } else {
+                                    sample_rates[nsample_rates].average = downsamples[k];
+                                }
+                                /*ndsDebugStream(m_node) << "OK Frequency: "  << sample_rates[nsample_rates].frequency
+                                                       << ", Divisor: "     << sample_rates[nsample_rates].divisor
+                                                       << ", Decimation: "  << sample_rates[nsample_rates].decimation
+                                                       << ", Average: "     << sample_rates[nsample_rates].average
+                                                       << ". Sample Rate: " << sample_rates[nsample_rates].sample_rate << std::endl;*/
+                                nsample_rates++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort lowest sample rates firsts.
+            qsort(sample_rates, nsample_rates, sizeof(struct sample_rate), compare_sample_rates);
+
+            /*ndsInfoStream(m_node) << "Will set Frequency: " << sample_rates[0].frequency
+                              << ", Divider: "          << sample_rates[0].divisor
+                              << ", Decimation: "       << sample_rates[0].decimation
+                              << ", Average: "          << sample_rates[0].average
+                              << ". Sample Rate: "      << sample_rates[0].sample_rate << std::endl;*/
+
+            *freq = sample_rates[0].frequency;
+            *divisor = sample_rates[0].divisor;
+            *decimation = sample_rates[0].decimation;
+            *averaging = sample_rates[0].average;
+
+            status = ifcdaqdrv_set_clock_frequency(ifcuser, *freq);
+            status += ifcdaqdrv_set_clock_divisor(ifcuser, *divisor);
+            if(*decimation > 1) {
+                status += ifcdaqdrv_set_average(ifcuser, 1);
+                status += ifcdaqdrv_set_decimation(ifcuser, *decimation);
+            } else {
+                status += ifcdaqdrv_set_decimation(ifcuser, 1);
+                status += ifcdaqdrv_set_average(ifcuser, *averaging);
+            }
+            if (status) {
+                LOG((5, "Setting values failed\n"));
+                return status_device_access;
+            }
+        }
+    }
+
+    return status;
+}
 
