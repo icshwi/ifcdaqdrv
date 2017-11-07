@@ -30,25 +30,25 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
     p = ifcdevice->fru_id->product_name;
     if (p) {
         if (strcmp(p, "ACQ420FMC") == 0) {
-            LOG((5, "No support for ACQ420FMC yet!\n"));
+            INFOLOG(("No support for ACQ420FMC yet!\n"));
             return status_incompatible;
         } else if (strcmp(p, "ADC3110") == 0) {
-            LOG((5, "Identified ADC3110\n"));
+            INFOLOG(("Identified ADC3110 on FMC %d\n", ifcdevice->fmc));
             adc3110_register(ifcdevice);
         } else if (strcmp(p, "ADC3111") == 0) {
-            LOG((5, "Identified ADC3111\n"));
+            INFOLOG(("Identified ADC3111 on FMC %d\n", ifcdevice->fmc));
             adc3111_register(ifcdevice);
         } else if (strcmp(p, "ADC3112") == 0) {
-            LOG((5, "No support for ADC3112 yet\n"));
+            INFOLOG(("No support for ADC3112 yet\n"));
             return status_incompatible;
         } else if (strcmp(p, "ADC3117") == 0) {
-            LOG((5, "Identified ADC3117\n"));
+            INFOLOG(("Identified ADC3117 on FMC %d\n", ifcdevice->fmc));
             adc3117_register(ifcdevice);
         } else if (strcmp(p, "DIO3118") == 0) {
-            LOG((5, "Identified DIO3118\n"));
+            INFOLOG(("Identified DIO3118 on FMC %d\n", ifcdevice->fmc));
             dio3118_register(ifcdevice);
         }else {
-            LOG((5, "No recognized device %s\n", p));
+            LOG((LEVEL_ERROR, "No recognized device %s\n", p));
             return status_incompatible;
         }
     } else {
@@ -519,7 +519,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
             return status;
         }
         ifcdaqdrv_end_tmeas();
-        printf("[ifcdaqdrv] ifcdaqdrv_read_smem_unlocked took %d us\n", ifcdaqdrv_elapsedtime());
+        printf("[ifcdaqdrv] ifcdaqdrv_read_smem_unlocked took %ld us\n", ifcdaqdrv_elapsedtime());
 
         status = ifcdaqdrv_get_smem_la(ifcdevice, &last_address);
         if (status) {
@@ -562,7 +562,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         }
 
         ifcdaqdrv_end_tmeas();
-        printf("[ifcdaqdrv] pretigger organization took %d us\n", ifcdaqdrv_elapsedtime());
+        printf("[ifcdaqdrv] pretigger organization took %ld us\n", ifcdaqdrv_elapsedtime());
 
 #if 0
         int32_t *itr;
@@ -826,8 +826,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
         return status_success;
     }
 
-    TRACE_IOC;
-
     // CS register
     // - Move decimation
     // - Move Pre-trigger size
@@ -865,13 +863,18 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 
     /* Clear general control register and enable specific acquisition mode.. */
     if (ifcdevice->fmc == 1) {
-        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
+        status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
                                                                             IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
                                        IFC_SCOPE_DTACQ_TCSR_GC_FMC1_ACQRUN_SHIFT, 0xffffffff);
     } else { /* fmc is FMC2 */
-        ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
+        status = ifc_scope_tcsr_setclr(ifcdevice, IFC_SCOPE_DTACQ_TCSR_GC, (IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK |
                                                                             IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK) <<
                                        IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT, 0xffffffff);
+    }
+
+    if (status) {
+        LOG((LEVEL_ERROR, "Error trying to access firmware registers (returned %d )", status));
+        return status;
     }
 
 #if 0
@@ -885,8 +888,13 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 	printf("ifcdaqdrv_scope_smem_configacq returned %d \n", status);
 #endif
     
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
-    ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
+    status = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
+    status = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
+
+    if (status) {
+        LOG((LEVEL_ERROR, "Error trying to access firmware registers (returned %d )", status));
+        return status;
+    }
 
     //ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
     //printf("CS REG after switch %08x\n", i32_reg_val);
@@ -901,7 +909,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
         break;
     }
 
-    return status_success;
+    return status;
 }
 
 /* The rules for setting number of samples:
@@ -982,7 +990,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
 
 ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t npretrig)
 {
-    ifcdaqdrv_status      status;
+    ifcdaqdrv_status      __attribute__((unused)) status;
     uint32_t              nsamples;
     uint32_t              ptq;
 
@@ -1003,6 +1011,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, u
 
     return ifcdaqdrv_set_ptq(ifcdevice, ptq);
 }
+
+
 ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t *npretrig)
 {
     ifcdaqdrv_status      status;
@@ -1135,8 +1145,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_smem_clearacq(struct ifcdaqdrv_dev *ifcdevice)
 {
     ifcdaqdrv_status      status;
 
-    TRACE_IOC;
-
     /* Argument validation */
     if ((ifcdevice->fmc != 1) && (ifcdevice->fmc != 2)) 
     	return status_argument_range;
@@ -1153,8 +1161,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_smem_clearacq(struct ifcdaqdrv_dev *ifcdevice)
 ifcdaqdrv_status ifcdaqdrv_scope_smem_configacq(struct ifcdaqdrv_dev *ifcdevice)
 {
     ifcdaqdrv_status      status;
-
-    TRACE_IOC;
 
     /* Argument validation */
     if ((ifcdevice->fmc != 1) && (ifcdevice->fmc != 2)) 

@@ -64,7 +64,7 @@ static ifcdaqdrv_status dio3118_check_ready(struct ifcdaqdrv_dev *ifcdevice) {
     return status;
 }
 
-static ifcdaqdrv_status dio3118_get_temperature(struct ifcdaqdrv_dev *ifcdevice, uint32_t *data) {
+static ifcdaqdrv_status __attribute__((unused)) dio3118_get_temperature(struct ifcdaqdrv_dev *ifcdevice, uint32_t *data) {
     ifcdaqdrv_status  status;
     uint32_t device = 0x40040048;
     uint32_t reg_val;
@@ -92,7 +92,7 @@ static ifcdaqdrv_status dio3118_get_temperature(struct ifcdaqdrv_dev *ifcdevice,
     return status;
 }
 
-static ifcdaqdrv_status dio3118_test_loopback(struct ifcdaqdrv_dev *ifcdevice) {
+static ifcdaqdrv_status __attribute__((unused)) dio3118_test_loopback(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdaqdrv_status  status;
     int32_t i32_reg_val, i;
     uint32_t output = 0x00000001, input = 0x00008000;

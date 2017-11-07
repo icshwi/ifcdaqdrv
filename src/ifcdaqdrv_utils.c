@@ -27,89 +27,56 @@ struct timespec ts_start, ts_end;
 /****************************/
 
 
-ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val){
+ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val)
+{
     int ret;
-#if DEBUG
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
         // error message
-        printf(
-            "Error: ifc_tcsr_read(crate=%d,offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
-            ifcdevice->card, offset, register_idx);
+        fprintf(stderr,"ERROR: ifc_tcsr_read(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
+            offset, register_idx);
         return -1;
     }
-#endif
 
-    // *i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
     ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
-
-    if (ret != 0)
-        printf("[tsc_csr_read()] TOSCA LIB READ returned %d\n", ret);
-
+    if (ret) {
+        fprintf(stderr,"ERROR: tsc_csr_read() tsc library returned %d\n", ret);
+    }
     return ret;
 }
 
-ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value){
-#if DEBUG_N
+ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value)
+{
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
         // error message
-        printf(
-            "Error: ifc_tcsr_read(crate=%d,offset=0x%x:idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
-            ifcdevice->card, offset, register_idx);
+        fprintf(stderr,"ERROR: ifc_tcsr_write(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
+            offset, register_idx);
         return -1;
     }
-    int32_t i32_reg_val;
-    ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (befor write)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (write)\n",       ifcdevice->card, offset, register_idx, value));
-#endif
 
-    // pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), value);
     int ret;
     ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
 
-    if (ret != 0)
-        printf("[tsc_csr_write()] TOSCA LIB WRITE returned %d\n", ret);
-
-#if DEBUG_N
-    ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (after write)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
-#endif
-    return 0;
+    if (ret) {
+        fprintf(stderr,"ERROR: tsc_csr_write() tsc library returned %d\n", ret);
+    }
+    return ret;
 }
 
-ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t
-                                 clrmask){
+ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t clrmask)
+{
     int32_t i32_reg_val;
-    //int ret;
-#if DEBUG
-    if ((register_idx < 0) || (register_idx >= 1024)) {
-        // error message
-        printf("Error: ifc_tcsr_read(crate=%d,offset=0x%x,idx=%d) idx is out of range! (valid range is 0..1024)",
-               ifcdevice->card, offset, register_idx);
-        return -1;
+    int ret;
+
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    if (ret) {
+        return ret;
     }
-#endif
-
-    //i32_reg_val = pevx_csr_rd(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    //ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
-    tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
-
-#if DEBUG_N
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (before setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
-    LOG((7, "crate %d: CSR[0x%x:%02x] set=%08x clr=%08x\n",   ifcdevice->card, offset, register_idx, setmask, clrmask));
-#endif
 
     i32_reg_val &= ~clrmask;
     i32_reg_val |= setmask;
 
-    //pevx_csr_wr(ifcdevice->card, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
-    tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
-
-#if DEBUG_N
-    ifc_tcsr_read(ifcdevice, offset, register_idx, &i32_reg_val);
-    LOG((7, "crate %d: CSR[0x%x:%02x] %08x (after setclr)\n", ifcdevice->card, offset, register_idx, i32_reg_val));
-#endif
-    return 0;
+    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    return ret;
 }
 
 /* Functions for accessing any XUSER TCSR */
@@ -211,7 +178,6 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     //void *p;
     int ret;
 
-    //ifcdevice->sram_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->sram_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->sram_dma_buf) {
         goto err_sram_ctl;
@@ -219,22 +185,23 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->sram_dma_buf->size = ifcdevice->sram_size;
 
-    LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_size / 1024));
+    LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition with tsc_kbuf_alloc()\n", ifcdevice->sram_size / 1024));
     if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
+        fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_sram_buf;
     }
 
 #ifdef SRAM_DMA
-    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition\n", ifcdevice->sram_dma_buf->size / 1024));
+    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
         //goto err_mmap_sram;
-        printf("Error while tryinf to map u_base using kbuf_mmap [SRAM]\n");
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
     }
 #endif
 
-    //ifcdevice->smem_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
+        fprintf(stderr, "ERROR: calloc(1, sizeof(struct tsc_ioctl_kbuf_req)) failed\n");
         goto err_smem_ctl;
     }
 
@@ -242,13 +209,11 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
         LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
-
         ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
-
-
     } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
     if(ret) {
+        fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_smem_buf;
     }
 
@@ -256,24 +221,29 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
         //goto err_mmap_smem;
-        printf("Error while tryinf to map u_base using kbuf_mmap\n");
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
     }
 #endif
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
     if(!ifcdevice->all_ch_buf){
+        fprintf(stderr, "calloc(ifcdevice->smem_size, 1) failed\n");
         goto err_smem_user_buf;
     }
 
-    printf("Trying to allocate 1 MiB in userspace for temporary SRAM data\n");
+    LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
     ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
     if(!ifcdevice->sram_blk_buf){
+        fprintf(stderr, "calloc for the sram_blk_buf() failed\n");
         goto err_mmap_sram;
     }
 
 
-#ifdef DEBUG
+    /* This routine was used during development to check the memory allocation */
+
+#if 0
+//#ifdef DEBUG
     uint64_t tp_sram;
     uint64_t tp_smem;
     tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
@@ -295,18 +265,15 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     return status_success;
 
  err_mmap_sram:
-//     tsc_kbuf_munmap(ifcdevice->smem_dma_buf); 
     free(ifcdevice->all_ch_buf);
 
 err_smem_user_buf:
-    //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->smem_dma_buf);
  
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
-    //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
     tsc_kbuf_free(ifcdevice->sram_dma_buf);
 
 // err_mmap_sram:
@@ -559,9 +526,9 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
     intptr_t src_addr;
     uint32_t current_size;
     uint32_t total_size; /* Debug variable */
-    uint64_t total_time; /* Debug variable */
+    uint64_t __attribute__((unused)) total_time; /* Debug variable */
 
-    long meastime = 0;
+    //long meastime = 0;
 
     if(DEBUG) total_size = size;
     LOG((LEVEL_DEBUG, "Copying from: 0x%08x, amount: %u\n", offset, size));
@@ -583,7 +550,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
         // dma_buf is already dma_addr_t
         // src_addr sholud be casted
 
-#if DEBUG
+#if 0
 	printf(" [smem_read] dma_buf->size = %"PRIu32" \n", dma_buf->size);
 	printf(" [smem_read] dma_buf->size = 0x%08x \n", dma_buf->size);
 	printf(" [smem_read] curr_size = %"PRIu32" \n", current_size);

@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define UNUSED(x) (void)(x)
+
 /*
  * Usage LOG((LEVEL, fmt, args...))
  *
@@ -32,7 +34,7 @@
 #define LEVEL_DEBUG 7
 #define LEVEL_TRACE 8
 
-static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
+static const char __attribute__((unused)) *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 
 #ifdef NDEBUG
 #define DEBUG 0
@@ -41,11 +43,8 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #endif /* NDEBUG */
 
 //#define SRAM_DMA
-#define ENABLE_TRACE_IOC
-#define NENABLE_TRACE_SERIAL
 
 #define SMEM_MODE_ENABLED
-
 #define ENABLE_I2C
 
 #define I2C_CTL_EXEC_IDLE 0x00000000
@@ -80,12 +79,18 @@ static const char *level_str[] = {"", "", "", "E", "W", "N", "I", "D", "T"};
 #define LOG_ARGS(level, fmt, args...) \
     if(DEBUG || level <= LEVEL_INFO) { \
       if(level <= ifcdaqdrvDebug || level <= 3) { \
-        fprintf(stderr, "[%s] %s:%d:%s(): ", level_str[level], __FILE__, __LINE__, __func__); \
+        fprintf(stderr, "[IFC1410 driver] [%s] %s:%d:%s(): ", level_str[level], __FILE__, __LINE__, __func__); \
         fprintf(stderr, fmt, ## args); \
       } \
     }
 
-#define UNUSED(x) (void)(x)
+
+#define INFOLOG(msg)	do { INFOLOG_ARGS msg; } while (0)
+#define INFOLOG_ARGS(fmt, args...) \
+    fprintf(stderr, "[IFC1410 driver] "); \
+    fprintf(stderr, fmt, ## args);
+
+
 
 extern int32_t ifcdaqdrvDebug;
 

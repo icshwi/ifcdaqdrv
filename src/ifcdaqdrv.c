@@ -33,7 +33,7 @@ pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
 
 ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     ifcdaqdrv_status      status;
-    //struct pevx_node     *node;
+    
     int                   node; /* TOSCA file descriptor */
     int32_t               i32_reg_val;
     struct ifcdaqdrv_dev *ifcdevice;
@@ -43,8 +43,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         return status_argument_invalid;
     }
 
-    ifcdaqdrvDebug = 7; // Manually set level for debug
-    LOG((5, "Level %d tracing set.\n", ifcdaqdrvDebug));
+    ifcdaqdrvDebug = 4; // Manually set level for debug
+    LOG((LEVEL_NOTICE, "Level %d tracing set.\n", ifcdaqdrvDebug));
 
     pthread_mutex_lock(&ifcdaqdrv_devlist_lock);
 
@@ -65,7 +65,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         }
     }
 
-    /* Initialize pevx library */
+    /* Initialize tsc library */
 
     node = tsc_init();
     if (node < 0) {
@@ -104,7 +104,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         // return status_incompatible;
     }
     ifcdevice->tosca_signature = i32_reg_val;
-
+    
 
     /* Read APP signature */
     status = ifc_scope_tcsr_read(ifcdevice, 0, &i32_reg_val);
@@ -117,14 +117,15 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
-        LOG((5, "Generic DAQ Application\n"));
+        LOG((LEVEL_NOTICE, "Generic DAQ Application\n"));
         /* Recognized scope implementation. */
         break;
     case IFC1210FASTINT_APP_SIGNATURE:
-        LOG((5, "Fast Interlock Application\n"));
+        LOG((LEVEL_NOTICE, "Fast Interlock Application\n"));
         /* Recognized fast interlock implementation */
         break;
     default:
+        LOG((LEVEL_NOTICE, "Firmware application not supported\n"));
         // Skip all signature verification for now...
         //status = status_incompatible;
         //goto err_read;
@@ -132,19 +133,16 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
     ifcdevice->app_signature = i32_reg_val;
 
-#if DEBUG
-    printf("TOSCA signature: %08x, APP signature: %08x, ", ifcdevice->tosca_signature, ifcdevice->app_signature);
+    INFOLOG(("TOSCA signature: %08x, APP signature: %08x\n", ifcdevice->tosca_signature, ifcdevice->app_signature));
+
     /* Read FMC FDK signature */
     status = ifc_fmc_tcsr_read(ifcdevice, 0, &i32_reg_val);
     if (status) {
         status = status_internal;
         goto err_read;
     }
-    printf("FMC FDK signature: %08x\n", i32_reg_val);
-#endif
+    INFOLOG(("FMC FDK signature: %08x\n", i32_reg_val));
 
-
-/********************************** Skip reading FRU information *******************************/
     /* Determine what type of FMC that is mounted. */
     ifcdevice->fru_id = calloc(1, sizeof(struct fmc_fru_id));
     if (!ifcdevice->fru_id) {
@@ -159,7 +157,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
 
 #ifdef ENABLE_I2C
-    printf("Trying to read EEPROM \n");
+    LOG((LEVEL_NOTICE, "Trying to read EEPROM\n"));
     ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
 #endif
     
@@ -197,6 +195,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         break;
     }
 
+    /* Enable the CENTRAL FPGA using the PON FPGA (pi c c0000000)*/
     tsc_pon_write(IFC1410_FMC_EN_OFFSET, &data);
 
     /* Add device to the list of opened devices */
@@ -291,7 +290,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     }
 
     if(ifcdevice->init_called == 0){
-        fprintf(stderr, "WARNING: init_adc() has not been called\n");
+        LOG((LEVEL_WARNING,"WARNING: init_adc() has not been called\n"));
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
@@ -333,22 +332,23 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     /* if the "for" didn't break, then ACQ_CLKERR is still HIGH, which means that clock is not locked */
     if (i == 5)
     {
-#if DEBUG
-        printf("Error: %s() ADC acquisition clock reference PLL is unlocked!\n", __FUNCTION__);
-#endif
+        LOG((LEVEL_ERROR,"Error: %s() ADC acquisition clock reference PLL is unlocked!\n", __FUNCTION__));
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_unknown;
     }
 
     /* Arm device */
-    // printf(" ############################## Arming device ######################################### \n");
     if (ifcdevice->board_id == 0x3117) {
         status = ifc_scope_tcsr_write(ifcdevice, 0x1, 0xFFFFF000);
         status += ifc_scope_tcsr_write(ifcdevice, 0x2, 0x2);
         status += ifc_scope_tcsr_write(ifcdevice, 0x8, 0xFFFFF000);
         status += ifc_scope_tcsr_write(ifcdevice, 0x9, 0x2);
-        if (status)
+        
+        if (status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
             return status_device_access;
+        }
+
     } else {
         status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_TCSR_CS_REG, 1 << IFC_SCOPE_TCSR_CS_ACQ_Command_SHIFT, 0);
 
@@ -369,12 +369,9 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
             ifcdaqdrv_get_decimation(ifcuser, &decimation);
 
             acquisition_time = ((nsamples * average * decimation) / (frequency / divisor));
+
             /* Poll for the expected acquisition time before giving up */
             timeo = SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6);
-
-#ifdef DEBUG
-            //LOG((6, "%f %d iterations\n", acquisition_time, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
-#endif
             do {
                 status  = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_LA_REG, 1 << IFC_SCOPE_TCSR_LA_Spec_CMD_SHIFT);
                 usleep(ifcdevice->poll_period);
@@ -388,7 +385,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
 
             if(((i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT) < 2) {
                 // Failed to self-trigger.
-                LOG((6, "CS register value is %08x after %d iterations\n", i32_reg_val, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
+                LOG((LEVEL_INFO, "CS register value is %08x after %d iterations\n", i32_reg_val, (int32_t) (SOFT_TRIG_LEAST_AMOUNT_OF_CYCLES + acquisition_time / (ifcdevice->poll_period * 1e-6))));
                 pthread_mutex_unlock(&ifcdevice->lock);
                 return status_internal;
             }
@@ -487,10 +484,8 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
         } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00080000) != 0x0));
     } else {
         do {
-       
             status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-	    //printf("TCSR %02x 0x%08x\n", ifc_get_scope_tcsr_offset(ifcdevice), i32_reg_val);
-            //usleep(ifcdevice->poll_period);
+	        usleep(ifcdevice->poll_period);
         } while (!status && ifcdevice->armed && (
                 (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_Status_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_Status_SHIFT !=
                   IFC_SCOPE_TCSR_CS_ACQ_Status_VAL_DONE));
@@ -815,6 +810,15 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
         return status_no_device;
     }
 
+    /* Forces ADC3117 trigger to be software until we don't have the support in firmware */
+    /* TODO: enable backplane trigger for ADC3117 */
+    if (ifcdevice->board_id == 0x3117) {
+        if (trigger != ifcdaqdrv_trigger_soft) {
+            LOG((LEVEL_ERROR, "ADC3117 only supports software (manual) trigger"));
+        }
+        trigger = ifcdaqdrv_trigger_soft;
+    }
+
     switch (trigger) {
 
     /* Changed mask register to adapt for mTCA instead of VME */
@@ -897,7 +901,7 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
         break;
     }
 
-    LOG((LEVEL_INFO, "Will set cs val 0x%08x, trig val 0x%08x\n", i32_cs_val, i32_trig_val));
+    LOG((LEVEL_DEBUG, "Will set cs val 0x%08x, trig val 0x%08x\n", i32_cs_val, i32_trig_val));
 
     pthread_mutex_lock(&ifcdevice->lock);
 
@@ -1259,8 +1263,8 @@ ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     }
 
     if (ifcdevice->board_id == 0x3117) {
-        LOG((7, "Not valid operation on ADC3117\n"));
-        return status_success; //Maybe return status_no_support?
+        LOG((LEVEL_DEBUG, "Not valid operation on ADC3117\n"));
+        return status_no_support; //Maybe return status_no_support?
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
@@ -1289,9 +1293,9 @@ ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     }
 
     if (ifcdevice->board_id == 0x3117) {
-        LOG((7, "Not valid operation on ADC3117\n"));
+        LOG((LEVEL_DEBUG, "Not valid operation on ADC3117\n"));
         *npretrig = 0;
-        return status_success; //Maybe return status_no_support?
+        return status_no_support; //Maybe return status_no_support?
     }
 
     if (!npretrig) {
@@ -1686,7 +1690,7 @@ ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqd
 {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
-    uint32_t ui32_regval;
+    uint32_t __attribute__((unused)) ui32_regval;
 
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
@@ -1695,6 +1699,9 @@ ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqd
 
     status = status_success;
 
+    //TODO: remove this function from the library - it is not used anymore
+
+#if 0
     switch (function)
     {
         case ifcdaqdrv_simtrig_stop: // stop periodic trigger            
@@ -1750,6 +1757,7 @@ ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqd
     }   
 
     if (status) printf("Error while trying to access register 0x6F\n");     
+#endif
 
     return status;
 }
@@ -1815,7 +1823,7 @@ ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32
             status += ifcdaqdrv_get_decimations_valid(ifcuser, decimations, sizeof(decimations)/sizeof(uint32_t), &ndecimations);
             status += ifcdaqdrv_get_averages_valid(ifcuser, averages, sizeof(averages)/sizeof(uint32_t), &naverages);
             if (status) {
-                LOG((5, "Getting values failed\n"));
+                LOG((LEVEL_NOTICE, "Getting values failed\n"));
                 return status_device_access;
             }
 
@@ -1900,7 +1908,7 @@ ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32
                 status += ifcdaqdrv_set_average(ifcuser, *averaging);
             }
             if (status) {
-                LOG((5, "Setting values failed\n"));
+                LOG((LEVEL_NOTICE, "Setting values failed\n"));
                 return status_device_access;
             }
         }

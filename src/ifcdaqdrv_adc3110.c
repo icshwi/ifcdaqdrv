@@ -1137,7 +1137,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_blink_fast);
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_blink_slow);
 
-    TRACE_INIT("\n-----------------------------Starting initialization procedure --------------------------\n");
+    /* -----------------------------Starting initialization procedure -------------------------- */
 
     // Power down ADS #01 #23 #4567 
     ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1D00);
@@ -1149,7 +1149,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     /*
      * Setup LMK04906
      */
-    TRACE_INIT("\n---------------------------------Configuring LMK04906 -----------------------------------\n");
+    /* ---------------------------------Configuring LMK04906 ----------------------------------- */
   
     // Reset device
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x00, 0x00020000);
@@ -1194,14 +1194,14 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1F, 0x00000000); // LMK04906_R31 uWIRE Not LOCK
 
-    TRACE_INIT("\n----------------------Enable Internal 100 MHz clock from  +OSC575 ------------------------\n");
+    /* ----------------------Enable Internal 100 MHz clock from  +OSC575 ------------------------ */
     ifc_fmc_tcsr_write(ifcdevice, 0x02, 0x80000003);
     usleep(2000);
 
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
     usleep(20000);
 
-    TRACE_INIT("\n--------------------------------Configuring the ADCs --------------------------------------\n");
+    /* --------------------------------Configuring the ADCs --------------------------------------*/
     
     adc3110_adc_init_priv(ifcdevice, ADS01);
     adc3110_adc_init_priv(ifcdevice, ADS23);
@@ -1218,7 +1218,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
 
 
-    TRACE_INIT("\n-------------------------------Checking if CLK is locked -----------------------------------\n");
+    /* -------------------------------Checking if CLK is locked ----------------------------------- */
 
     // Verification Clock has started
     // Warning: ads42lb69 01 shall be initialized
@@ -1246,15 +1246,14 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
     /* Check if MMC is locked */
     if (value & 0x00008000) {
         
-        printf("\n---------------------------------Initialization DONE !!! ---------------------------------\n");
+        INFOLOG(("Initialization of ADC311x is complete\n" ));
         return status_success;
     }
 
     // Failed to set clock
     // return status_internal;
-#if DEBUG
     printf("%s(): Warning: Failed to lock clock..\n", __FUNCTION__);
-#endif
+    
     return status_success;
 }
 
