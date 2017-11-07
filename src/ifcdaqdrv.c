@@ -156,7 +156,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         goto err_read;
     }
 
-#ifdef ENABLE_I2C
+#if I2C_SUPPORT_IS_WORKING
     LOG((LEVEL_NOTICE, "Trying to read EEPROM\n"));
     ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
 #endif
@@ -1224,6 +1224,7 @@ ifcdaqdrv_status ifcdaqdrv_set_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_device_armed;
     }
+
     status = ifcdevice->set_nsamples(ifcdevice, nsamples);
     pthread_mutex_unlock(&ifcdevice->lock);
     return status;
@@ -1246,6 +1247,7 @@ ifcdaqdrv_status ifcdaqdrv_get_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     if(!ifcdevice->get_nsamples) {
         return status_no_support;
     }
+
     return ifcdevice->get_nsamples(ifcdevice, nsamples);
 }
 

@@ -57,27 +57,25 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
         break;
     }
 
-#ifdef ENABLE_I2C    
+#if I2C_SUPPORT_IS_WORKING
+
     /* TODO: this might be incompatible */
-    if ((device & 0x30000) == 0x10000) address = tsc_swap_16(address);
-    //status = tsc_i2c_read(device, tsc_swap_16(address), &reg_val);
+    if ((device & 0x30000) == 0x10000) {
+        address = tsc_swap_16(address);
+    }
+    
     status = tsc_i2c_read(device, address, &reg_val);
     if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
-        printf("I2C did not reply the ack\n");
+        LOG((LEVEL_ERROR,"While calling tsc_i2c_read(), the device did not reply the ack\n"));
         return status_i2c_nack;
     }
+
 #else
     reg_val = 0;
 #endif
 
     *data = (uint8_t)reg_val;
     return status_success;
-
-#if DEBUG
-    printf("%s(fmc=%d,address=0x%04x) -> uint8_t [%c]\n", __FUNCTION__, ifcdevice->fmc, address, *data);
-#endif
-
-    return -1;
 }
 
 ifcdaqdrv_status ifc_fmc_eeprom_read_string(struct ifcdaqdrv_dev *ifcdevice, uint16_t address, int len, char *buf, int
@@ -108,7 +106,7 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_string(struct ifcdaqdrv_dev *ifcdevice, uin
     *p = '\0';
 
 #if DEBUG
-    printf("%s(): address=0x%04x -> string = %s\n", __FUNCTION__, address, buf);
+    INFOLOG(("%s(): address=0x%04x -> string = %s\n", __FUNCTION__, address, buf));
 #if 0
     printf("HEX: ");
     for (i = 0; i < buflen; ++i) {

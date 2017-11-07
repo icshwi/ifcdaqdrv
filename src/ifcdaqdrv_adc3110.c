@@ -110,7 +110,7 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->armed       = 0;
     ifcdevice->poll_period = 10;
 
-    status                 = adc3110_get_sram_nsamples_max(ifcdevice, &nsamples_max);
+    status = adc3110_get_sram_nsamples_max(ifcdevice, &nsamples_max);
     if (status) {
         return status;
     }
@@ -523,7 +523,7 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
 
     /*TODO: check usage of i2c_read. Who is the first argument ? */
     
-#ifdef ENABLE_I2C
+#if I2C_SUPPORT_IS_WORKING
     status  = tsc_i2c_read(device, reg, ui32_reg_val);
 
     /* TODO fix bit mask */

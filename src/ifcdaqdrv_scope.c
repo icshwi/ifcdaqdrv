@@ -25,7 +25,7 @@
 //typedef long dma_addr_t;
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
-#ifdef ENABLE_I2C
+#if I2C_SUPPORT_IS_WORKING
     char *p;
     p = ifcdevice->fru_id->product_name;
     if (p) {
@@ -56,6 +56,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         return status_internal;
     }
 #else
+    /* Legacy code from the development phase when I2C wasn't working */
     LOG((5, "Identified (forced) ADC3110\n"));
     adc3110_register(ifcdevice);
 #endif
@@ -519,7 +520,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
             return status;
         }
         ifcdaqdrv_end_tmeas();
-        printf("[ifcdaqdrv] ifcdaqdrv_read_smem_unlocked took %ld us\n", ifcdaqdrv_elapsedtime());
+        
 
         status = ifcdaqdrv_get_smem_la(ifcdevice, &last_address);
         if (status) {
@@ -562,7 +563,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         }
 
         ifcdaqdrv_end_tmeas();
-        printf("[ifcdaqdrv] pretigger organization took %ld us\n", ifcdaqdrv_elapsedtime());
+        
 
 #if 0
         int32_t *itr;
@@ -594,7 +595,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     int32_t          *res;
     uint32_t          last_address,  nsamples,  npretrig,  ptq;
 
-    struct tsc_ioctl_rdwr tsc_read_s;
 
     offset = 0;
     origin = NULL;
@@ -617,26 +617,30 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
         }
 
-#ifdef SRAM_DMA
-        
-        status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
-        if (status) {
-            return status;
+        /* If the FMC is ADC3110/3111 we can use the DMA */
+        if (ifcdevice->board_id != 0x3117) {
+            status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+            if (status) {
+                return status;
+            }
+        } else {
+            
+            /* DMA is not validated for ADC3117 - using block read for now */
+
+            /* Transfer data to sram_blk_buf */
+            struct tsc_ioctl_rdwr tsc_read_s;
+
+            tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
+            tsc_read_s.m.space = RDWR_SPACE_USR1;
+            tsc_read_s.m.swap = RDWR_SWAP_QS;
+            tsc_read_s.m.am = 0x0;
+       
+            status = tsc_read_blk((ulong)offset, (char*) ifcdevice->sram_blk_buf, nsamples * ifcdevice->sample_size, tsc_read_s.mode);
+            if (status) {
+                LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+                return status;
+            }
         }
-#else
-        
-        /* Transfer data to sram_blk_buf */
-        tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
-        tsc_read_s.m.space = RDWR_SPACE_USR1;
-        tsc_read_s.m.swap = RDWR_SWAP_QS;
-        tsc_read_s.m.am = 0x0;
-   
-        status = tsc_read_blk((ulong)offset, (char*) ifcdevice->sram_blk_buf, nsamples * ifcdevice->sample_size, tsc_read_s.mode);
-        if (status) {
-            printf("[TOSCA ERRROR ] tsc_blk_read() returned %d\n", status);
-            return status;
-        }
-#endif
         
         status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
         if (status) {
@@ -648,14 +652,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             return status;
         }
 
-#ifdef SRAM_DMA
-        /* TODO: check the usage of dma_buf for TOSCA user library */
-        ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
-        origin   = ifcdevice->sram_dma_buf->u_base;
-#else
-        ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_blk_buf,nsamples);
-        origin = (int16_t*) ifcdevice->sram_blk_buf;
-#endif
+        if (ifcdevice->board_id != 0x3117) {
+            /* ADC3110/ ADC3111 */
+            ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
+            origin   = ifcdevice->sram_dma_buf->u_base;
+        } else {
+            /* ADC3117 */
+            ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_blk_buf,nsamples);
+            origin = (int16_t*) ifcdevice->sram_blk_buf;
+        }
         
         npretrig = (nsamples * ptq) / 8;
         break;
@@ -934,10 +939,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t nsamples)
 {
     ifcdaqdrv_status status;
-    uint32_t average;
-
+    
     // If samples fit in sram use sram.
-    if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) {
+    if (nsamples * ifcdevice->sample_size <= ifcdevice->sram_size) 
+    {
+
+        // WORK AROUND TO AVOID DMA FAILURES WHEN NSAMPLES < 4096
+        if ((ifcdevice->board_id != 0x3117) && (nsamples < 4096)) {
+            nsamples = 4096;
+        }
 
         /* Check if nsamples is power of two */
         if ((nsamples & (nsamples - 1)) != 0) {
@@ -958,11 +968,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, u
   	return status_argument_range;
 
 #else 
-    status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
-    if (status) printf("ifcdaqdrv_scope_get_average returned %d\n", status);
+    uint32_t average;
 
+    status = ifcdaqdrv_scope_get_average(ifcdevice, &average);
+    if (status) {
+        LOG((LEVEL_ERROR,"ifcdaqdrv_scope_get_average returned %d\n", status));
+    } 
+        
     if(ifcdevice->nchannels == 8 && average < 4) {
-        printf("Can't set average < 4 in SMEM mode\n");
+        INFOLOG(("Can't set average < 4 in SMEM mode\n"));
         return status_config;
     }
 

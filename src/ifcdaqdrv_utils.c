@@ -21,11 +21,8 @@ typedef long dma_addr_t;
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_scope.h"
 
-
-/******************************/
+// Variables for the time-measure tool
 struct timespec ts_start, ts_end;
-/****************************/
-
 
 ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val)
 {
@@ -185,19 +182,21 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->sram_dma_buf->size = ifcdevice->sram_size;
 
+    /* If the FMC is ADC3117 the DMA is not functional, then we need to use tsc_kbuf_alloc */
     LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition with tsc_kbuf_alloc()\n", ifcdevice->sram_size / 1024));
     if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
         fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_sram_buf;
     }
 
-#ifdef SRAM_DMA
-    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
-    if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
-        //goto err_mmap_sram;
-        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
+    /* If the FMC is ADC3110 / ADC3117 we need tsc_kbuf_mmap to use the DMA operations */
+    if (ifcdevice->board_id != 0x3117) {
+        LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
+        if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
+            //goto err_mmap_sram;
+            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
+        }
     }
-#endif
 
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
@@ -217,13 +216,14 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
-#ifdef SRAM_DMA
-    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
-        //goto err_mmap_smem;
-        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+    /* If the FMC is a ADC3110 / 3111 then DMA is functional, so it needs to run tsc_kbuf_mmap */
+    if (ifcdevice->board_id != 0x3117) {
+        LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+        if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
+            //goto err_mmap_smem;
+            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+        }
     }
-#endif
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
@@ -305,18 +305,15 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 			    , uint8_t des_mode
 			    , uint32_t size) 
 {
-    //struct pev_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_dma_req dma_req = {0};
 
     int status;
     uint32_t valid_dma_status;
-
     struct tsc_ioctl_dma_sts dma_sts;
 
     /* Assuming that we are using channel ZERO */
-
     
-#ifdef PEV_MOV_MODE
+#if 0 //#ifdef PEV_MOV_MODE 
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = src_mode;
@@ -330,8 +327,9 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.start_mode = DMA_START_PIPE;
     dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
+#endif
 
-#else // TSC_MOV_MODE forcing the space size mask 
+    /* Based on TscMon source code */
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = 0;
@@ -346,12 +344,11 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.start_mode = DMA_START_CHAN(0);
     dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = 0;
-#endif
 
     status = tsc_dma_alloc(0);
     if (status) 
     {
-      LOG((4, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
       return status;
     }
 
@@ -359,17 +356,13 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     status = tsc_dma_status(&dma_sts);
     if (status) 
     {
-      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
       return status;
     }
 
-    // status = pevx_dma_move(ifcdevice->card, &dma_req);
     status = tsc_dma_move(&dma_req);
-
     if (status != 0) {
-#if DEBUG
-        LOG((4, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-#endif
+        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
         return status_read;
     }
 
@@ -378,23 +371,17 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     
     if (status) 
     {
-      LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
       return status;
     }
 
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
     status = tsc_dma_wait(&dma_req);
 
-    // dma_sts.dma.chan = 0;
-    // status = tsc_dma_status(&dma_sts);
-    // if (status) 
-    // {
-    //   LOG((4, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-    //   return status;
-    // }
-
-    if (status) printf("tsc_dma_wait() returned %d\n", status);
-
+    if (status) {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
+    }
+    
     // * 0x2 << 28 is the interrupt number.
     // * The board can only read from the shared memory. If we are not reading
     //   from shared memory the "WR0" will run because the DMA engine first has
@@ -405,10 +392,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     }
 
     if (dma_req.dma_status != valid_dma_status) {
-#if DEBUG
-        LOG((4, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));
-#endif
-        
+        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
         tsc_dma_free(0);
         return status_read;
     }
@@ -417,13 +401,9 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     status = tsc_dma_free(0);
     if (status) 
     {
-      LOG((4, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-      printf("Trying to dma_free 5 times!\n");
-
-      return status;
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status_read;
     }
-
-
     return  status_success;
 }
 
