@@ -44,7 +44,7 @@ static ADC3110_SBCDEVICE adc3110_get_sbc_device(unsigned channel){
         return ADS67;
     default:
 #if DEBUG
-        printf("%s(): Error: (channel=%d)\n", __FUNCTION__, channel);
+        LOG((LEVEL_ERROR,"%s(): Error: (channel=%d)\n", __FUNCTION__, channel));
 #endif
         return ADS01;
     }
@@ -65,7 +65,7 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
 
-    ifcdevice->init_adc              = adc3110_init_chips;
+    ifcdevice->init_adc              = adc3110_init_adc_alternative;
     ifcdevice->get_signature         = adc3110_get_signature;
     ifcdevice->set_led               = adc3110_set_led;
     ifcdevice->get_gain              = adc3110_get_gain;
@@ -95,6 +95,10 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
     ifcdevice->sample_size = 2;
     ifcdevice->nchannels   = 8;
+
+    /* Filling buffers with ONE */
+    memset((uint32_t*) ifcdevice->decimations, 1, sizeof(ifcdevice->decimations)/sizeof(uint32_t));
+    memset((uint32_t*) ifcdevice->averages, 1, sizeof(ifcdevice->averages)/sizeof(uint32_t));
 
     memcpy(ifcdevice->decimations,  decimations,  sizeof(decimations));
     memcpy(ifcdevice->averages,     averages,     sizeof(averages));
@@ -259,8 +263,8 @@ ifcdaqdrv_status adc3110_set_dataformat(struct ifcdaqdrv_dev *ifcdevice, ifcdaqd
         default:
             // wrong dataformat
 #if DEBUG
-            printf("Error: %s(crate=%d,fmc=%d,device=%d,dataformat=%d) wrong dataformat!\n", __FUNCTION__,
-                   ifcdevice->card, ifcdevice->fmc, adc3110_get_sbc_device(i * 2), dataformat);
+            INFOLOG(("Error: %s(crate=%d,fmc=%d,device=%d,dataformat=%d) wrong dataformat!\n", __FUNCTION__,
+                   ifcdevice->card, ifcdevice->fmc, adc3110_get_sbc_device(i * 2), dataformat));
 #endif
             return -1;
             break;
@@ -347,8 +351,8 @@ static uint32_t adc3110_SerialBus_prepare_command(ADC3110_SBCDEVICE device, int 
     default:
 
 #if DEBUG
-        printf("ERROR: %s(device=%d,addr=%d,writecmd=%d) unknown device %d", __FUNCTION__, device, addr, writecmd,
-               device);
+        INFOLOG(("ERROR: %s(device=%d,addr=%d,writecmd=%d) unknown device %d", __FUNCTION__, device, addr, writecmd,
+               device));
 #endif
 
         return 0;
@@ -432,7 +436,7 @@ ifcdaqdrv_status ifc_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struc
     char signature[ADC3110_SIGNATURELEN + 1];
     char *p;
 
-    printf("Trying to read EEPROM signature!!! \n");
+    INFOLOG(("Trying to read EEPROM signature!!! \n"));
     status = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000, 8, signature, sizeof(signature));
     if (status) {
         return status;
@@ -506,8 +510,8 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_ChannelOffsetCompensation(struct ifcdaqdrv_
         return status;
     }
 
-    printf("%s(channel=%d) -> offset = %s -> %d  /testDate=%s calibrationDate=%s\n", __FUNCTION__, channel, offstr,
-           *offsetcompensation, testDate, latestCalibrationDate);
+    INFOLOG(("%s(channel=%d) -> offset = %s -> %d  /testDate=%s calibrationDate=%s\n", __FUNCTION__, channel, offstr,
+           *offsetcompensation, testDate, latestCalibrationDate));
 #endif
 
     *offsetcompensation = strtol(offstr, NULL, 16);
@@ -670,7 +674,7 @@ ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
 
     // Verification Clock has started
     // Warning: ads42lb69 01 shall be initialized
-    const int timeout = 60; // 30ms
+    const int timeout = 120; // 60ms
 
     int       timo    = 0;
     int32_t   value;
@@ -699,7 +703,7 @@ ifcdaqdrv_status adc3110_set_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcda
     // Failed to set clock
     // return status_internal;
 #if DEBUG
-    printf("%s(): Warning: Failed to lock clock..\n", __FUNCTION__);
+    INFOLOG(("%s(): Warning: Failed to lock clock..\n", __FUNCTION__));
 #endif
     return status_success;
 }
@@ -801,7 +805,7 @@ ifcdaqdrv_status adc3110_ADC_setOffset(struct ifcdaqdrv_dev *ifcdevice, unsigned
     default:
         // wrong device
 #if DEBUG
-        printf("Error: adc3110_ADC_setOffset(device=%d,channel=%d) wrong device!\n", device, channel);
+        INFOLOG(("Error: adc3110_ADC_setOffset(device=%d,channel=%d) wrong device!\n", device, channel));
 #endif
         return -1;
         break;
@@ -910,8 +914,6 @@ ifcdaqdrv_status adc3110_get_gain(struct ifcdaqdrv_dev *ifcdevice, unsigned chan
         *gain = 1.0;
         return status;
     }
-
-    // printf("gain %d\n", i32_reg_val >> 3);
 
     switch ((ui32_reg_val >> 3) & 0x1F) {
     default:
@@ -1131,7 +1133,9 @@ ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, 
     return status;
 }
 
-ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
+/* This function is used because it is compatible with the IFC1410. The original "init_adc" was 
+created for IFC1210*/
+ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
 {
     // led off
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc0, ifcdaqdrv_led_blink_fast);
@@ -1222,7 +1226,7 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
 
     // Verification Clock has started
     // Warning: ads42lb69 01 shall be initialized
-    const int timeout = 60; // 30ms
+    const int timeout = 120; // 60ms
 
     int       timo    = 0;
     int32_t   value;
@@ -1245,14 +1249,17 @@ ifcdaqdrv_status adc3110_init_chips(struct ifcdaqdrv_dev *ifcdevice)
 
     /* Check if MMC is locked */
     if (value & 0x00008000) {
+
+        char *p;
+        p = ifcdevice->fru_id->product_name;
         
-        INFOLOG(("Initialization of ADC311x is complete\n" ));
+        INFOLOG(("Initialization of %s is complete\n",p));
         return status_success;
     }
 
     // Failed to set clock
     // return status_internal;
-    printf("%s(): Warning: Failed to lock clock..\n", __FUNCTION__);
+    INFOLOG(("%s(): Warning: Failed to lock clock..\n", __FUNCTION__));
     
     return status_success;
 }

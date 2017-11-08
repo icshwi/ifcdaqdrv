@@ -840,10 +840,10 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 
     switch(mode){
     case ifcdaqdrv_acq_mode_sram:
-        printf("[IFC1410 DEBUG] Switching to SRAM mode\n");
+        INFOLOG(("Switching acquisition to SRAM mode\n"));
         break;
     case ifcdaqdrv_acq_mode_smem:
-        printf("[IFC1410 DEBUG] Switching to SMEM mode\n");
+        INFOLOG(("Switching acquisition to SMEM mode\n"));
         break;
     }
 
@@ -881,31 +881,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
         LOG((LEVEL_ERROR, "Error trying to access firmware registers (returned %d )", status));
         return status;
     }
-
-#if 0
-    /* TEST: try to configure registers 0x61 / 0x62 */
-    status = ifcdaqdrv_scope_smem_clearacq(ifcdevice);
-    //if (status)	return status;
-    printf("ifcdaqdrv_scope_smem_clearacq returned %d \n", status); 
-
-    status = ifcdaqdrv_scope_smem_configacq(ifcdevice);
-    //if (status)	return status; 
-	printf("ifcdaqdrv_scope_smem_configacq returned %d \n", status);
-#endif
-    
+  
     status = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_CS_REG, cs_reg);
-    status = ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
+    status |= ifc_scope_acq_tcsr_write(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, trig_reg);
 
     if (status) {
         LOG((LEVEL_ERROR, "Error trying to access firmware registers (returned %d )", status));
         return status;
     }
-
-    //ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
-    //printf("CS REG after switch %08x\n", i32_reg_val);
-
-    //ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_TRIG_REG, &i32_reg_val);
-    //printf("TRIG REG after switch %08x\n", i32_reg_val);
 
     switch(mode){
     case ifcdaqdrv_acq_mode_sram:

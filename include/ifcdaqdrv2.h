@@ -404,7 +404,7 @@ ifcdaqdrv_status ifcdaqdrv_get_averages_valid(struct ifcdaqdrv_usr *ifcuser, uin
  * of values are copied from hardware to software but a larger part of the analog signal is acquired. Every sample will
  * be the N-th sample if an decimation factor of N is chosen.
  *
- * On some FMCs it is not possible to have both decimation and averaging simultaneously.
+ * On some FMCs it is not possible to have both decimation and averaging simultaneously. 
  *
  * @param[in] ifcuser    User struct.
  * @param[in] decimation The decimation factor.

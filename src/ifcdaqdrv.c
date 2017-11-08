@@ -1099,6 +1099,7 @@ ifcdaqdrv_status ifcdaqdrv_get_averages_valid(struct ifcdaqdrv_usr *ifcuser, uin
 
 /*
  * Set decimation
+ * 
  */
 
 ifcdaqdrv_status ifcdaqdrv_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_t decimation) {
@@ -1115,9 +1116,9 @@ ifcdaqdrv_status ifcdaqdrv_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_
         return status_argument_invalid;
     }
 
-    // Decimation is not supported when averaging is enabled.
+    // Decimation is not supported when averaging is enabled. 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
-    if(decimation != 1 && i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK) {
+    if((decimation != 1) && (i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK)) {
         return status_config;
     }
 
@@ -1130,8 +1131,7 @@ ifcdaqdrv_status ifcdaqdrv_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_
                 return status_device_armed;
             }
 
-	    	//printf("Decimation [%d] is valid, but ACQ_downSMP is forced to be zero (1:4 with avg)\n", decimation);  
-            //status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, i << 2, IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK);
+	    	status = ifc_scope_acq_tcsr_setclr(ifcdevice, 0, i << 2, IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK);
 	    
             pthread_mutex_unlock(&ifcdevice->lock);
             return status;
@@ -1158,14 +1158,18 @@ ifcdaqdrv_status ifcdaqdrv_get_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_
     }
 
     status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
+    if (status)
+    {
+        return status_read;
+    }
+
     if(!(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MOD_MASK)) {
         *decimation = ifcdevice->decimations[(i32_reg_val & IFC_SCOPE_TCSR_CS_ACQ_downSMP_MASK) >> IFC_SCOPE_TCSR_CS_ACQ_downSMP_SHIFT];
         return status;
     }
 
-    *decimation   = 1;
-
-    return status;
+    *decimation = 0;
+    return status_success;
 }
 
 /*
@@ -1668,7 +1672,7 @@ ifcdaqdrv_status ifcdaqdrv_get_fw_revision(struct ifcdaqdrv_usr *ifcuser, uint8_
 /*
  * Non-supported debug function
  */
-
+#if 0
 ifcdaqdrv_status ifcdaqdrv_debug(struct ifcdaqdrv_usr *ifcuser) {
     struct ifcdaqdrv_dev *ifcdevice;
     int i;
@@ -1685,7 +1689,7 @@ ifcdaqdrv_status ifcdaqdrv_debug(struct ifcdaqdrv_usr *ifcuser) {
     }
     return status_success;
 }
-
+#endif
 
 /* Function to simulate backplane trigger */
 ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider) 
