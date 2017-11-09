@@ -882,6 +882,7 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
         i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
 
     /* Additional cases needed to test the backplane triggering */
+#if 0
     case ifcdaqdrv_trigger_testmanual:
     case ifcdaqdrv_trigger_testauto:
 
@@ -897,7 +898,9 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
 
 
         break;
+#endif
     default:
+        i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
         break;
     }
 

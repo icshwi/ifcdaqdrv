@@ -104,9 +104,7 @@ typedef enum {
     ifcdaqdrv_trigger_backplane,  /**< Interpret channel mask as a VME trigger */
     ifcdaqdrv_trigger_frontpanel, /**< Interpret channel mask as DAQ channel or FMC GPIO */
     ifcdaqdrv_trigger_auto,       /**< Deprecated */
-    ifcdaqdrv_trigger_soft,       /**< Manually trigger from software immediately after arming device */
-    ifcdaqdrv_trigger_testmanual, /**< TEST ONLY: simulated backplane trigger under demand */
-    ifcdaqdrv_trigger_testauto    /**< TEST ONLY: simulated backplane trigger using periodic clk division */
+    ifcdaqdrv_trigger_soft        /**< Manually trigger from software immediately after arming device */
 } ifcdaqdrv_trigger_type;
 
 /**
