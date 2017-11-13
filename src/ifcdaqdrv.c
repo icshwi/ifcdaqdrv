@@ -878,27 +878,9 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
             // It doesn't make sense to have pre-trigger samples when triggering manually.
             return status_config;
         }
+
+    /* Treat trigger_none as soft trigger */    
     case ifcdaqdrv_trigger_none:
-        i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
-
-    /* Additional cases needed to test the backplane triggering */
-#if 0
-    case ifcdaqdrv_trigger_testmanual:
-    case ifcdaqdrv_trigger_testauto:
-
-        i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
-        i32_trig_val = 1 << 31; // Enable trigger
-
-        /* MASK will be either 11000 or 11001 */
-        i32_trig_val |= (mask & 0x1F) << 20;  // Set self trigger/ self periodic trigger 
-        i32_trig_val |= 0x03 << 16;           // keeps backplane trigger [17:16] = 11
-        if (rising_edge & 0x7FFFFFFF) {
-            i32_trig_val |= 1 << 27;
-        }
-
-
-        break;
-#endif
     default:
         i32_cs_val = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
         break;
