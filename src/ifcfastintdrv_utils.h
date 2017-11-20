@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
 
