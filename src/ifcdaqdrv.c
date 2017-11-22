@@ -18,7 +18,7 @@
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
-#include "ifcfastintdrv.h"
+#include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 
 #define IFC1410_FMC_EN_DATA   0xC0000000
@@ -165,6 +165,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
      * Register the correct functions with the ifcdevice and
      * allocate all memory necessary for DMA transfers
      */
+
     switch (ifcdevice->app_signature) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
@@ -201,6 +202,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     /* Add device to the list of opened devices */
     list_add_tail(&ifcdevice->list, &ifcdaqdrv_devlist);
     pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);
+
     return status_success;
 
 err_read:

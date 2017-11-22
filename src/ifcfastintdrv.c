@@ -6,11 +6,11 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include <ifcdaqdrv.h>
+#include <ifcdaqdrv2.h>
 
 #include "debug.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcfastintdrv.h"
+#include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 #include "ifcdaqdrv_adc3110.h"
 
@@ -108,6 +108,9 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 //        return status_internal;
 //    }
 //
+    
+    printf("INITIALIZATION OF IFCFASTINT WAS OK!!! \n");
+
     pthread_mutex_unlock(&ifcdevice->lock);
 
     return status_success;
@@ -178,6 +181,9 @@ ifcdaqdrv_status ifcfastint_get_pp_out(struct ifcdaqdrv_usr *ifcuser,
     }
     *analog = i32_reg_val && IFCFASTINT_ANALOG_PP_STATUS_QOUT_MASK;
 
+    printf("Analog  QOUT 0x%08x \n", *analog);
+    printf("Digital QOUT 0x%08x \n", *digital);
+
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }
@@ -233,7 +239,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     }
 
     /* Read 64 bytes from SMEM */
-    size = 64;
+    size_t size = 64;
     content_start = content_end - size;
 
     ifcdaqdrv_read_smem_unlocked(

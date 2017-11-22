@@ -53,8 +53,8 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
-    //usleep(200000);
-
+    //usleep(200000);	
+    
     ifcdevice->init_adc              = adc3117_init_adc;
     ifcdevice->get_signature         = adc3117_get_signature;
     ifcdevice->set_led               = adc3117_set_led;
@@ -294,10 +294,17 @@ ifcdaqdrv_status adc3117_set_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, do
 
 ifcdaqdrv_status adc3117_get_clock_frequency(struct ifcdaqdrv_dev *ifcdevice, double *frequency) {
 
+    if (frequency != NULL) {
+        *frequency = 5000000.0;
+    }
     return status_success;
 }
 
 ifcdaqdrv_status adc3117_get_clock_source(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_clock *clock){
+
+    if (clock != NULL) {
+        *clock = ifcdaqdrv_clock_internal;
+    }
 
     return status_success;
 }
@@ -313,6 +320,10 @@ ifcdaqdrv_status adc3117_set_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint
 }
 
 ifcdaqdrv_status adc3117_get_clock_divisor(struct ifcdaqdrv_dev *ifcdevice, uint32_t *divisor){
+
+    if (divisor != NULL) {
+        *divisor = 1;
+    }
 
     return status_success;
 }

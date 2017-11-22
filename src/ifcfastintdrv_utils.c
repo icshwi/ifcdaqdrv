@@ -5,15 +5,18 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <pevxulib.h>
+//#include <pevxulib.h>
+#include "tscioctl.h"
+#include "tsculib.h"
+
 
 #include "debug.h"
-#include "ifcdaqdrv.h"
+#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_adc3110.h"
+#include "ifcdaqdrv_adc3117.h"
 #include "ifcfastintdrv_utils.h"
 
-static const double   valid_clocks[] = {2400e6, 2500e6, 0};
+static const double   valid_clocks[] = {5e6, 0};
 
 static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     switch (ifcdevice->sample_size) {
@@ -27,21 +30,24 @@ static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     return 0;
 }
 
-static inline void INIT_SECONDARY(struct ifcdaqdrv_dev *ifcdevice, struct ifcdaqdrv_dev *secondary) {
-    secondary->card = ifcdevice->card;
-    secondary->fmc = 2;
-    secondary->node = ifcdevice->node;
-    pthread_mutex_init(&secondary->sub_lock, NULL);
-}
+// static inline void INIT_SECONDARY(struct ifcdaqdrv_dev *ifcdevice, struct ifcdaqdrv_dev *secondary) {
+//     secondary->card = ifcdevice->card;
+//     secondary->fmc = 2;
+//     secondary->node = ifcdevice->node;
+//     pthread_mutex_init(&secondary->sub_lock, NULL);
+// }
 
 /* Since the IFC Fast Interlock uses both FMCs we initialize both */
 ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
     // Initialize the ADCs, this will
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
-    adc3110_init_adc(ifcdevice);
-    struct ifcdaqdrv_dev secondary;
-    INIT_SECONDARY(ifcdevice, &secondary);
-    adc3110_init_adc(&secondary);
+    adc3117_init_adc(ifcdevice);
+ 
+    /* No secundary FMC is needed */
+    // struct ifcdaqdrv_dev secondary;
+    // INIT_SECONDARY(ifcdevice, &secondary);
+    // adc3110_init_adc(&secondary);
+
     int32_t i32regval;
 
     /* Set correct pins on P2 to IN */
@@ -223,26 +229,33 @@ void ifcfastint_print_status(int32_t reg) {
         printf("\n");
 }
 
+/* Register ADC3117 FMC */
+
 ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
+    
+    /* Activate FMC */
+    ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
+    usleep(900000);
+
     ifcdevice->init_adc = ifcfastintdrv_init_adc;
-    ifcdevice->nchannels = 8;
+    ifcdevice->nchannels = 20;
     ifcdevice->smem_size = 256<<20; //256 MB
-    ifcdevice->vref_max = 0.5;
+    ifcdevice->vref_max = 10.24;
     ifcdevice->sample_resolution = 16;
     ifcdevice->sample_size = 2; // Important for endianess
     ifcdevice->poll_period = 1000;
 
     /* Functions to configure clock */
-    ifcdevice->set_clock_frequency   = adc3110_set_clock_frequency;
-    ifcdevice->get_clock_frequency   = adc3110_get_clock_frequency;
-    ifcdevice->set_clock_source      = adc3110_set_clock_source;
-    ifcdevice->get_clock_source      = adc3110_get_clock_source;
-    ifcdevice->set_clock_divisor     = adc3110_set_clock_divisor;
-    ifcdevice->get_clock_divisor     = adc3110_get_clock_divisor;
+    ifcdevice->set_clock_frequency   = adc3117_set_clock_frequency;
+    ifcdevice->get_clock_frequency   = adc3117_get_clock_frequency;
+    ifcdevice->set_clock_source      = adc3117_set_clock_source;
+    ifcdevice->get_clock_source      = adc3117_get_clock_source;
+    ifcdevice->set_clock_divisor     = adc3117_set_clock_divisor;
+    ifcdevice->get_clock_divisor     = adc3117_get_clock_divisor;
 
     memcpy(ifcdevice->valid_clocks, valid_clocks, sizeof(valid_clocks));
-    ifcdevice->divisor_max = 125; //1045;
-    ifcdevice->divisor_min = 8; //1;
+    ifcdevice->divisor_max = 1; //1045;
+    ifcdevice->divisor_min = 1; //1;
 
     return status_success;
 }
@@ -251,8 +264,12 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
     ifcdaqdrv_status status;
-    struct pev_ioctl_dma_req dma_req = {0};
-    struct pev_ioctl_buf dma_buf  = {0};
+
+
+    /* To be ported when DMA is operational */
+#if 0
+    struct tsc_ioctl_dma_req dma_req = {0};
+    struct tsc_ioctl_kbuf_req dma_buf  = {0};
 
     dma_buf.size = sizeof(*pp_options);
 
@@ -289,14 +306,53 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
         LOG((LEVEL_ERROR, "dma_status %08x\n", status));
         return status_write;
     }
+#endif
+
+/*************************************************************************************************************/
+    struct tsc_ioctl_rdwr tsc_read_s;
+
+    tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
+    tsc_read_s.m.space = RDWR_SPACE_USR1;
+    tsc_read_s.m.swap = RDWR_SWAP_QS;
+    tsc_read_s.m.am = 0x0;
+
+    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+
+    void *mybuffer = calloc(1024*1024,1);
+
+    // Trying to read from TMEM
+    ulong src_addr = PP_OFFSET + addr;
+
+    // status = tsc_read_blk(src_addr, (char*) ifcdevice->sram_blk_buf, sizeof(*pp_options), tsc_read_s.mode);
+#ifdef READBLK
+    usleep(2000);
+    status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
+#else
+    status = 0;
+#endif
+
+    if (status) {
+        LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        return status;
+    }
+
+    memcpy((void *)pp_options, mybuffer, sizeof(*pp_options));
+
+    //free mybuffer
+    free(mybuffer);
+
+/**************************************************************************************************************/
 
     return status_success;
 }
 
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status;
-    struct pev_ioctl_dma_req dma_req = {0};
-    struct pev_ioctl_buf dma_buf  = {0};
+
+    /* To be ported when DMA is operational */
+#if 0
+    struct tsc_ioctl_dma_req dma_req = {0};
+    struct tsc_ioctl_kbuf_req dma_buf  = {0};
 
     dma_buf.size = sizeof(pp_options);
 
@@ -330,12 +386,44 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
         LOG((LEVEL_ERROR, "dma_status %08x\n", status));
         return status_write;
     }
+#endif
+
+/*************************************************************************************************************/
+    void *mybuffer = calloc(1024*1024,1);
+    memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
+
+    struct tsc_ioctl_rdwr tsc_write_s;
+
+    tsc_write_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
+    tsc_write_s.m.space = RDWR_SPACE_USR1;
+    tsc_write_s.m.swap = RDWR_SWAP_QS;
+    tsc_write_s.m.am = 0x0;
+
+    // Trying to read from TMEM
+    ulong dest_addr = PP_OFFSET + addr;
+
+#ifdef READBLK
+    printf("Entering tsc_write_blk\n");
+    status = tsc_write_blk(dest_addr, (char*) mybuffer, sizeof(pp_options), tsc_write_s.mode);
+#else
+    status = 0;
+#endif
+    
+    if (status) {
+        LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        return status;
+    }
+
+    free(mybuffer);
+    
+/**************************************************************************************************************/
+
     return status_success;
 }
 
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
-    void *p;
-    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct pev_ioctl_buf));
+    //void *p;
+    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
     }
@@ -343,18 +431,39 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     // Try to allocate as large dma memory as possible
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
 
+
+    //TODO: enable tsc_kbuf_alloc when DMA is operational 
+#if 0
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", ifcdevice->smem_dma_buf->size));
-        p = pevx_buf_alloc(ifcdevice->card, ifcdevice->smem_dma_buf);
+        p = tsc_kbuf_alloc(ifcdevice->card, ifcdevice->smem_dma_buf);
     } while (p == NULL && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
+#endif
 
+    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
+        //goto err_mmap_smem;
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+    }
+    LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
+
+#if 0
     if(!p) {
         free(ifcdevice->smem_dma_buf);
         return status_internal;
     }
+#endif
+    
+    printf("Allocating sram_blk_buf\n");
+    /* Temporary solution to allocate memory for use with tsc_blk calls */
+    LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
+    ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
+    if(!ifcdevice->sram_blk_buf){
+        fprintf(stderr, "calloc for the sram_blk_buf() failed\n");
+        return status_internal;
+    }
 
-    LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
-
+    printf("Success when allocating sram_blk_buf\n");
     return status_success;
 }
 
