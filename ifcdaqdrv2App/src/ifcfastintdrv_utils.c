@@ -9,7 +9,6 @@
 #include "tscioctl.h"
 #include "tsculib.h"
 
-
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
@@ -264,7 +263,108 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
     ifcdaqdrv_status status;
+    
 
+/********************* FIRST DMA TRIAL  ************************************************************/
+#if 0
+    struct tsc_ioctl_dma_req dma_req = {0};
+    uint32_t valid_dma_status;
+
+    struct tsc_ioctl_dma_sts dma_sts;
+    struct tsc_ioctl_kbuf_req *dma_buf;
+
+    /* workaround */
+#ifndef DMA_SPACE_USR1
+    #define DMA_SPACE_USR1 0x04
+#endif
+
+#ifndef DMA_SPACE_USR2
+    #define DMA_SPACE_USR2 0x05
+#endif
+
+    dma_buf = ifcdevice->smem_dma_buf;
+
+    dma_req.src_addr = (dma_addr_t) PP_OFFSET + addr;
+    dma_req.src_space = DMA_SPACE_USR1;
+    dma_req.src_mode = DMA_PCIE_RR2;
+
+    dma_req.des_addr = dma_buf->b_base;
+    //dma_req.des_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
+    dma_req.des_space = DMA_SPACE_PCIE | DMA_SPACE_DS;
+    dma_req.des_mode = DMA_PCIE_RR2;
+
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = DMA_START_CHAN(0);
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = 0;
+
+    dma_req.size = 4096 | DMA_SIZE_PKT_128;
+
+    status = tsc_dma_alloc(0);
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    status = tsc_dma_move(&dma_req);
+    if (status != 0) {
+        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        return status_read;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
+    status = tsc_dma_wait(&dma_req);
+
+    if (status) {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
+    }
+    
+    // * 0x2 << 28 is the interrupt number.
+    // * The board can only read from the shared memory. If we are not reading
+    //   from shared memory the "WR0" will run because the DMA engine first has
+    //   to write the data into the shared memory.
+    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
+    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
+        valid_dma_status |= DMA_STATUS_RUN_WR0;
+    }
+
+    if (dma_req.dma_status != valid_dma_status) {
+        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+        tsc_dma_free(0);
+        return status_read;
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(0);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status_read;
+    }
+
+    /* Copy from kernel space (dma_buf) to userspace (pp_options)
+     * TODO: check for errors and fill buffer with zeros??
+     */
+    memcpy((void *)pp_options, dma_buf->u_base, sizeof(*pp_options));
+#endif
 
     /* To be ported when DMA is operational */
 #if 0
@@ -308,6 +408,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     }
 #endif
 
+#if 1
 /*************************************************************************************************************/
     struct tsc_ioctl_rdwr tsc_read_s;
 
@@ -342,6 +443,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     free(mybuffer);
 
 /**************************************************************************************************************/
+#endif 
 
     return status_success;
 }
@@ -423,6 +525,8 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
 
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     //void *p;
+    int ret;
+
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
@@ -430,31 +534,25 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     // Try to allocate as large dma memory as possible
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
-
-
-    //TODO: enable tsc_kbuf_alloc when DMA is operational 
-#if 0
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", ifcdevice->smem_dma_buf->size));
-        p = tsc_kbuf_alloc(ifcdevice->card, ifcdevice->smem_dma_buf);
-    } while (p == NULL && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
-#endif
+        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
+    } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
+#if 0
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
         //goto err_mmap_smem;
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
     }
     LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
+#endif
 
-#if 0
-    if(!p) {
+    if(ret) {
         free(ifcdevice->smem_dma_buf);
         return status_internal;
     }
-#endif
     
-    printf("Allocating sram_blk_buf\n");
     /* Temporary solution to allocate memory for use with tsc_blk calls */
     LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
     ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
@@ -463,7 +561,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         return status_internal;
     }
 
-    printf("Success when allocating sram_blk_buf\n");
+    printf("\n Success when allocating smem_dma_buf - size = %d\n", ifcdevice->smem_dma_buf->size);
     return status_success;
 }
 

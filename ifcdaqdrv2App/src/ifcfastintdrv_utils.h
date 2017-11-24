@@ -3,7 +3,12 @@
 
 #include <stddef.h>
 
+#include <pthread.h>
+#include <linux/types.h>
+
 #include "ifcdaqdrv2.h"
+
+#define READBLK
 
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
 

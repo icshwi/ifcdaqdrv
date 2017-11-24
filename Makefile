@@ -1,19 +1,31 @@
-PROJECT=ifcdaqdrv2
+# Makefile at top of application tree
+TOP = .
+include $(TOP)/configure/CONFIG
 
-include $(EPICS_ENV_PATH)/module.Makefile
+# Directories to build, any order
+DIRS += configure
+DIRS += $(wildcard *Sup)
+DIRS += $(wildcard *App)
+DIRS += $(wildcard *Top)
+DIRS += $(wildcard iocBoot)
 
+# The build order is controlled by these dependency rules:
 
-SOURCES = $(wildcard src/*.c)
-HEADERS = $(wildcard include/*.h)
+# All dirs except configure depend on configure
+$(foreach dir, $(filter-out configure, $(DIRS)), \
+    $(eval $(dir)_DEPEND_DIRS += configure))
 
-# Compile away some debug code if compiling with optimizations
-#OPT_CPPFLAGS_YES = -DDEBUG
+# Any *App dirs depend on all *Sup dirs
+$(foreach dir, $(filter %App, $(DIRS)), \
+    $(eval $(dir)_DEPEND_DIRS += $(filter %Sup, $(DIRS))))
 
-#OPT_CPPFLAGS_YES += -DREADBLK
+# Any *Top dirs depend on all *Sup and *App dirs
+$(foreach dir, $(filter %Top, $(DIRS)), \
+    $(eval $(dir)_DEPEND_DIRS += $(filter %Sup %App, $(DIRS))))
 
-# Compile with TOSCA user library support
-#OPT_CPPFLAGS_YES = -DTOSCA_USRLIB
+# iocBoot depends on all *App dirs
+iocBoot_DEPEND_DIRS += $(filter %App,$(DIRS))
 
-# Enable debug, disabled by default.
-HOST_OPT = YES
-CROSS_OPT = YES
+# Add any additional dependency rules here:
+
+include $(TOP)/configure/RULES_TOP
