@@ -109,12 +109,8 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 //    }
 //
     
-    printf("INITIALIZATION OF IFCFASTINT WAS OK!!! \n");
-
     pthread_mutex_unlock(&ifcdevice->lock);
-
     return status_success;
-
 }
 
 /* This is only safe to call when state == abort, otherwise it will hang indefinitely */
@@ -242,6 +238,10 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     size_t size = 64;
     content_start = content_end - size;
 
+
+    /* No HISTORY BUFFER reading */
+
+#if 0    
     ifcdaqdrv_read_smem_unlocked(
             ifcdevice,
             data,
@@ -249,6 +249,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
             content_start,
             size
     );
+#endif
 
     // Update Read PTR
     status = ifc_xuser_tcsr_write(ifcdevice, IFCFASTINT_BUF_R_PTR_REG, content_end);
@@ -355,6 +356,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         return status_success;
     }
 
+#if 0
     // Check if `content_start` is outside buffer
     if(content_start > buf_start) {
         LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) in order\n", *nelm, size));
@@ -384,7 +386,8 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
                 content_end - buf_start
         );
     }
-
+#endif
+    
     // Update Read PTR
     status = ifc_xuser_tcsr_write(ifcdevice, IFCFASTINT_BUF_R_PTR_REG, content_end);
     if(status) {
@@ -654,13 +657,16 @@ ifcdaqdrv_status ifcfastint_get_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
         return status_argument_invalid;
     }
 
+    pthread_mutex_lock(&ifcdevice->lock);
+
     if ((ppblock != ifcfastint_analog_pp_channel)&&(ppblock != ifcfastint_analog_pp_pwravg))
     {
     	/* Read the configuration (OPTION1) of the standard analog input pre-processing block. */
     	fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + block*8; // OPTION1 registers starts at 0x200
 
-    	pthread_mutex_lock(&ifcdevice->lock);
-    	status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
+    	usleep(10000);
+        /* Read first time */
+        status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
     	if(status) {
     		pthread_mutex_unlock(&ifcdevice->lock);
     		return status_internal;
@@ -676,6 +682,10 @@ ifcdaqdrv_status ifcfastint_get_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
     	option->val3 = 0xFFFF;
     	option->val4 = 0xFFFF;
     }
+
+    // printf("\nReadback after writing... \n");
+    // ifcfastintdrv_printregister(&pp_options);
+    // printf("***************************************************************\n");    
 
     /* Read IDLE->PRE qualifier TODO(nc): unmagicify ??? */
     status = ifc_xuser_tcsr_read(ifcdevice, 0x70, &i32_reg_val);
@@ -725,6 +735,7 @@ ifcdaqdrv_status ifcfastint_get_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
     fpga_mem_address = 0x600 + (block*16);
 
     pthread_mutex_lock(&ifcdevice->lock);
+    usleep(10000);
     status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
@@ -743,6 +754,7 @@ ifcdaqdrv_status ifcfastint_get_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
 
     /* Prepares to read OPTION2 configuration (starts at 0x600) */
    	fpga_mem_address = 0x608 + (block*16);
+    usleep(10000);
    	status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
    	if(status) {
    		pthread_mutex_unlock(&ifcdevice->lock);
@@ -780,6 +792,7 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     uint64_t pp_options = 0;
+    uint64_t pp_options_rb = 0;
     int32_t i32_reg_val;
     uint64_t active = 0;
     uint32_t fpga_mem_address = 0;
@@ -806,18 +819,24 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
     //}
     active = 1;
 
+    pthread_mutex_lock(&ifcdevice->lock);
+
     if ((ppblock != ifcfastint_analog_pp_channel)&&(ppblock != ifcfastint_analog_pp_pwravg))
     {
 		/* TMEM4_1 address */
 		fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + block*8; // OPTION1 registers starts at 0x200
 
-		/* Read current configuration */
-		pthread_mutex_lock(&ifcdevice->lock);
+		/* Read current configuration */	
 		status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
 		if(status) {
 			pthread_mutex_unlock(&ifcdevice->lock);
 			return status_internal;
 		}
+
+        // printf("***************************************************************\n");    
+        // printf("Reading conf register area before a write operation...\n");
+        // ifcfastintdrv_printregister(&pp_options);
+
 
 		/* Writing a new mode */
 		if(write_mask & IFCFASTINT_ANALOG_MODE_W) {
@@ -860,11 +879,39 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
 
     /* Writes OPTION1 configuration space */
     fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + block*8;
-    status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
+
+    // printf("What will be written in PP OPTIONS [ADDR = 0x%08x] \n", fpga_mem_address);
+    // ifcfastintdrv_printregister(&pp_options);
+
+
+    /* WORK AROUND TO READ/WRITE OPERATIONS */
+    int max_atempts = 10;
+    for (; max_atempts > 0; max_atempts--)
+    {
+        /* Write attempt */
+        status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        /* Read back attempt */
+        status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options_rb);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        if (pp_options_rb == pp_options) {
+            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+            break;
+        }
     }
+
+    if (max_atempts == 0) {
+        INFOLOG(("Failed write operation at address 0x%08x after\n", fpga_mem_address));
+    }
+
 
     /* OPTION2 is not necessary if pp block is not pwravg */
 //    status = ifcfastintdrv_read_pp_conf(ifcdevice, 0x300 + block*8, &pp_options);
@@ -927,6 +974,7 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     uint64_t pp_options = 0;
+    uint64_t pp_options_rb = 0;
     int32_t i32_reg_val;
     uint64_t active = 0;
     uint32_t fpga_mem_address = 0;
@@ -1005,10 +1053,31 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
 
     /* Writes OPTION1 configuration space */
     fpga_mem_address = 0x600 + (block*16);
-    status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
+
+    /* WORK AROUND TO READ/WRITE OPERATIONS */
+    int max_atempts = 10;
+    for (; max_atempts > 0; max_atempts--)
+    {
+        status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options_rb);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        if (pp_options_rb == pp_options) {
+            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+            break;
+        }
+    }
+
+    if (max_atempts == 0) {
+        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
     }
 
     /* Write OPTION2 configuration space */
@@ -1028,10 +1097,30 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
     }
 
     fpga_mem_address = 0x608 + (block*16);
-    status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
+
+    /* WORK AROUND TO READ/WRITE OPERATIONS */
+    for (max_atempts=10; max_atempts > 0; max_atempts--)
+    {
+        status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options_rb);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        if (pp_options_rb == pp_options) {
+            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+            break;
+        }
+    }
+
+    if (max_atempts == 0) {
+        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
     }
 
     // TODO(nc): unmagicify
@@ -1097,6 +1186,7 @@ ifcdaqdrv_status ifcfastint_get_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
     fpga_mem_address = 0x100 + block*8;
 
     pthread_mutex_lock(&ifcdevice->lock);
+    usleep(10000);
     status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options1);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
@@ -1135,6 +1225,7 @@ ifcdaqdrv_status ifcfastint_set_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     uint64_t pp_options = 0;
+    uint64_t pp_options_rb = 0;
     int32_t i32_reg_val;
     uint64_t active = 0;
     uint32_t fpga_mem_address = 0;
@@ -1170,7 +1261,14 @@ ifcdaqdrv_status ifcfastint_set_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
     /* Write the configuration block. */
 
     pthread_mutex_lock(&ifcdevice->lock);
-    status = ifcfastintdrv_read_pp_conf(ifcdevice, block*8, &pp_options);
+
+    fpga_mem_address = 0x100 + block*8;
+    status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
+    if(status) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_internal;
+    }
+
     if(write_mask & IFCFASTINT_DIGITAL_MODE_W) {
         pp_options = u64_setclr(pp_options, active, 1, 63);
         pp_options = u64_setclr(pp_options, option->mode, 0xF, 56);
@@ -1189,12 +1287,33 @@ ifcdaqdrv_status ifcfastint_set_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
     }
 
     fpga_mem_address = 0x100 + block*8;
-    status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
+
+    /* WORK AROUND TO READ/WRITE OPERATIONS */
+    int max_atempts = 10;
+    for (; max_atempts > 0; max_atempts--)
+    {
+
+        status = ifcfastintdrv_write_pp_conf(ifcdevice, fpga_mem_address, pp_options);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        status = ifcfastintdrv_read_pp_conf(ifcdevice, block*8, &pp_options_rb);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+
+        if (pp_options_rb == pp_options) {
+            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+            break;
+        }
     }
 
+    if (max_atempts == 0) {
+        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+    }
 
     // TODO(nc): unmagicify
     if(write_mask & IFCFASTINT_DIGITAL_IDLE2PRE_W) {

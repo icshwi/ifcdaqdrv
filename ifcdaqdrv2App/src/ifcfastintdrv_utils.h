@@ -8,8 +8,6 @@
 
 #include "ifcdaqdrv2.h"
 
-#define READBLK
-
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
 
 #define IFCFASTINT_SIGN_REG 0x60
@@ -51,15 +49,28 @@
 #define IFCFASTINT_FSM_MAN_FSM_CMD_SHIFT              28
 
 #define IFCFASTINT_DIGITAL_PP_STATUS_QOUT_MASK 0x00ffffff
-
 #define IFCFASTINT_ANALOG_PP_STATUS_QOUT_MASK 0x00ffffff
 
-ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice);
+/* Help to printout the 64-bit register content */
+#define IFCFASTINT_ANALOGPP_REG_PPACT_MASK 		0x1000000000000000
+#define IFCFASTINT_ANALOGPP_REG_PPACT_SHIFT		63
+#define IFCFASTINT_ANALOGPP_REG_PPEMU_MASK		0x4000000000000000
+#define IFCFASTINT_ANALOGPP_REG_PPEMU_SHIFT		62
+#define IFCFASTINT_ANALOGPP_REG_PPMODE_MASK		0x0f00000000000000
+#define IFCFASTINT_ANALOGPP_REG_PPMODE_SHIFT	56
+#define IFCFASTINT_ANALOGPP_REG_PPVAL1_MASK		0x00000000ffff0000
+#define IFCFASTINT_ANALOGPP_REG_PPVAL1_SHIFT	16
+#define IFCFASTINT_ANALOGPP_REG_PPVAL2_MASK		0x00ffffff00000000
+#define IFCFASTINT_ANALOGPP_REG_PPVAL2_SHIFT	32
+#define IFCFASTINT_ANALOGPP_REG_PPCVAL_MASK		0x000000000000ffff
+#define IFCFASTINT_ANALOGPP_REG_PPCVAL_SHIFT	0
 
+
+ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options);
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options);
-
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice);
+ifcdaqdrv_status ifcfastintdrv_printregister(uint64_t *pp_register);
 
 void ifcfastintdrv_history_reset(struct ifcdaqdrv_dev *ifcdevice);
 

@@ -265,7 +265,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     ifcdaqdrv_status status;
     
 
-/********************* FIRST DMA TRIAL  ************************************************************/
+/********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
 #if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     uint32_t valid_dma_status;
@@ -366,7 +366,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     memcpy((void *)pp_options, dma_buf->u_base, sizeof(*pp_options));
 #endif
 
-    /* To be ported when DMA is operational */
+    /***************************************** Legacy code from VME ***************************************/
 #if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req dma_buf  = {0};
@@ -408,42 +408,26 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     }
 #endif
 
-#if 1
-/*************************************************************************************************************/
-    struct tsc_ioctl_rdwr tsc_read_s;
-
-    tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
-    tsc_read_s.m.space = RDWR_SPACE_USR1;
-    tsc_read_s.m.swap = RDWR_SWAP_QS;
-    tsc_read_s.m.am = 0x0;
+/********************* Reading TMEM memory space using CPU copy *******************************************/
 
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
-
     void *mybuffer = calloc(1024*1024,1);
 
-    // Trying to read from TMEM
     ulong src_addr = PP_OFFSET + addr;
 
-    // status = tsc_read_blk(src_addr, (char*) ifcdevice->sram_blk_buf, sizeof(*pp_options), tsc_read_s.mode);
-#ifdef READBLK
     usleep(2000);
     status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
-#else
-    status = 0;
-#endif
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        free(mybuffer);
         return status;
     }
 
     memcpy((void *)pp_options, mybuffer, sizeof(*pp_options));
-
-    //free mybuffer
     free(mybuffer);
 
-/**************************************************************************************************************/
-#endif 
+/********************************************************************************************************/
 
     return status_success;
 }
@@ -451,7 +435,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status;
 
-    /* To be ported when DMA is operational */
+/******************************** Legacy code from VME *************************************************/
 #if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req dma_buf  = {0};
@@ -490,33 +474,22 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     }
 #endif
 
-/*************************************************************************************************************/
+/*************** Write TMEM address space using CPU copy  ****************************************************/
     void *mybuffer = calloc(1024*1024,1);
     memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
 
-    struct tsc_ioctl_rdwr tsc_write_s;
-
-    tsc_write_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
-    tsc_write_s.m.space = RDWR_SPACE_USR1;
-    tsc_write_s.m.swap = RDWR_SWAP_QS;
-    tsc_write_s.m.am = 0x0;
-
-    // Trying to read from TMEM
     ulong dest_addr = PP_OFFSET + addr;
+    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
 
-#ifdef READBLK
-    printf("Entering tsc_write_blk\n");
-    status = tsc_write_blk(dest_addr, (char*) mybuffer, sizeof(pp_options), tsc_write_s.mode);
-#else
-    status = 0;
-#endif
+    usleep(2000);
+    status = tsc_write_blk(dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
     
+    free(mybuffer);
+
     if (status) {
-        LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        LOG((LEVEL_ERROR,"tsc_blk_write() returned %d\n", status));
         return status;
     }
-
-    free(mybuffer);
     
 /**************************************************************************************************************/
 
@@ -527,6 +500,9 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     //void *p;
     int ret;
 
+/************** Currently there is no need for kernel allocation with TSC ***************************/
+
+#if 1    
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
@@ -539,6 +515,13 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
     } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
+    if(ret) {
+        free(ifcdevice->smem_dma_buf);
+        return status_internal;
+    }
+
+#endif
+
 #if 0
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
@@ -548,10 +531,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
 #endif
 
-    if(ret) {
-        free(ifcdevice->smem_dma_buf);
-        return status_internal;
-    }
+#if 1
     
     /* Temporary solution to allocate memory for use with tsc_blk calls */
     LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
@@ -561,7 +541,8 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         return status_internal;
     }
 
-    printf("\n Success when allocating smem_dma_buf - size = %d\n", ifcdevice->smem_dma_buf->size);
+#endif
+    
     return status_success;
 }
 
@@ -571,3 +552,34 @@ inline uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_
     return output;
 }
 
+ifcdaqdrv_status ifcfastintdrv_printregister(uint64_t *pp_register) {
+    uint64_t tmp;
+    uint32_t value;
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPACT_MASK) >> IFCFASTINT_ANALOGPP_REG_PPACT_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_ACT  =   %d\n", value);
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPEMU_MASK) >> IFCFASTINT_ANALOGPP_REG_PPEMU_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_EMUL =   %d\n", value);
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPMODE_MASK) >> IFCFASTINT_ANALOGPP_REG_PPMODE_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_MODE = 0x%04x\n", value);
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPVAL1_MASK) >> IFCFASTINT_ANALOGPP_REG_PPVAL1_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_VAL1 = 0x%08x\n", value);
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPVAL2_MASK) >> IFCFASTINT_ANALOGPP_REG_PPVAL2_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_VAL2 = 0x%08x\n", value);
+
+    tmp = (*pp_register & IFCFASTINT_ANALOGPP_REG_PPCVAL_MASK) >> IFCFASTINT_ANALOGPP_REG_PPCVAL_SHIFT;
+    value = (uint32_t) tmp;
+    printf("pp_option_CVAL = 0x%08x\n", value);
+
+    printf("\n");
+    return status_success;
+}
