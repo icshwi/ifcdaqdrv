@@ -1910,3 +1910,40 @@ ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32
     return status;
 }
 
+ifcdaqdrv_status ifcdaqdrv_set_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t value)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+    if (!ifcdevice->set_digiout) {
+        return status_no_support;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    status = ifcdevice->set_digiout(ifcuser->device, channel, value);
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t *value)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+    if (!ifcdevice->get_digiout) {
+        return status_no_support;
+    }
+
+    return ifcdevice->get_digiout(ifcuser->device, channel, value);
+}
+
+
