@@ -590,13 +590,13 @@ typedef enum {
  } ifcdaqdrv_simtrigger_action;
 
 ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider);
-
 ifcdaqdrv_status ifcdaqdrv_set_sample_rate(struct ifcdaqdrv_usr *ifcuser, double sample_rate);
 ifcdaqdrv_status ifcdaqdrv_get_sample_rate(struct ifcdaqdrv_usr *ifcuser, double *sample_rate);
-
 ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
-
 ifcdaqdrv_status ifcdaqdrv_send_configuration_command(struct ifcdaqdrv_usr *ifcuser);
+
+ifcdaqdrv_status ifcdaqdrv_set_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t value);
+ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t *value);
 
 #ifdef __cplusplus
 }

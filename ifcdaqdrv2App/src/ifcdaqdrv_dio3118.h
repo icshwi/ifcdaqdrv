@@ -27,4 +27,8 @@ ifcdaqdrv_status dio3118_init_dio(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status dio3118_set_led(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_led led, ifcdaqdrv_led_state led_state);
 ifcdaqdrv_status dio3118_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,  uint16_t *board_id);
 
+ifcdaqdrv_status dio3118_set_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t value);
+ifcdaqdrv_status dio3118_get_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t *value);
+
+
 #endif // _IFC_DIO3118_H_

@@ -149,6 +149,8 @@ ifcdaqdrv_status dio3118_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->init_adc              = dio3118_init_dio;
     ifcdevice->get_signature         = dio3118_get_signature;
     ifcdevice->set_led               = dio3118_set_led;
+    ifcdevice->set_digiout           = dio3118_set_digiout;
+    ifcdevice->get_digiout           = dio3118_get_digiout;
 
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
 
@@ -227,6 +229,55 @@ ifcdaqdrv_status dio3118_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t 
     }
 
     return status;
+}
+
+ifcdaqdrv_status dio3118_set_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t value)
+{
+    ifcdaqdrv_status status;
+
+    if (channel > 20) {
+        return status_argument_invalid;
+    }
+
+    if (value == 0) {
+        status = ifc_fmc_tcsr_setclr(ifcdevice, DIO3118_DSO_DAT_REG, 0, 1 << channel); //clear
+    } else  {
+        status = ifc_fmc_tcsr_setclr(ifcdevice, DIO3118_DSO_DAT_REG, 1 << channel, 0); //set
+    }
+
+    if (status) {
+        return status_internal;
+    }
+
+    return status_success;
+}
+
+
+ifcdaqdrv_status dio3118_get_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t *value)
+{
+    ifcdaqdrv_status status;
+    int32_t i32_reg_val;
+
+    if (channel > 20) {
+        return status_argument_invalid;
+    }
+
+    status = ifc_fmc_tcsr_read(ifcdevice, DIO3118_DSI_DAT_REG, &i32_reg_val);
+    if (status) {
+        return status_internal;
+    }
+
+    /* bitwise operation to extract the bit value */
+    i32_reg_val = (i32_reg_val & (1 << channel));
+
+    if (i32_reg_val) {
+        *value = 1;
+    } else {
+        *value = 0;
+    }
+
+
+    return status_success;
 }
 
 

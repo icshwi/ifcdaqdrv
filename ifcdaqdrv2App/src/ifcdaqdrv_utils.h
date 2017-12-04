@@ -158,6 +158,8 @@ struct ifcdaqdrv_dev {
 
     pthread_mutex_t lock;                                  /**< Lock that serializes access to the device. */
     pthread_mutex_t sub_lock;                              /**< Lock that serializes access to part of the device. */
+    int                 (*set_digiout)(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t value);
+    int                 (*get_digiout)(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t *value);
 };
 
 inline static void setbit(uint32_t *val, int bitnr, int on){
