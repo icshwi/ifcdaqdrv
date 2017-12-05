@@ -325,7 +325,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
         LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
         tsc_dma_clear(0);
     }
-    else if(dma_req[chan].dma_status & DMA_STATUS_ERR)
+    else if(dma_req.dma_status & DMA_STATUS_ERR)
     {
         LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
     }
@@ -435,7 +435,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
         LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
         tsc_dma_clear(0);
     }
-    else if(dma_req[chan].dma_status & DMA_STATUS_ERR)
+    else if(dma_req.dma_status & DMA_STATUS_ERR)
     {
         LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
     }
@@ -511,7 +511,7 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
 static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req) {   
     if (tsc_kbuf_free(kbuf_req))
     {
-        fprintf(stderr, "[ERROR] tsclib returned error when trying tsc_kbuf_free%s\n");
+        fprintf(stderr, "[ERROR] tsclib returned error when trying tsc_kbuf_free\n");
         return status_internal;
     }
     return status_success;
