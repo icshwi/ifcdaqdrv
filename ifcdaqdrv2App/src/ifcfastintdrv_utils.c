@@ -17,6 +17,9 @@
 
 static const double   valid_clocks[] = {5e6, 0};
 
+static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req);
+static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req);
+
 static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     switch (ifcdevice->sample_size) {
     case 2:
@@ -262,94 +265,69 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 #define PP_OFFSET 0x100000
 
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
-    ifcdaqdrv_status status;
     
+    ifcdaqdrv_status status;
 
 /********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
-#if 0
+#if 1
     struct tsc_ioctl_dma_req dma_req = {0};
-    uint32_t valid_dma_status;
-
-    struct tsc_ioctl_dma_sts dma_sts;
     struct tsc_ioctl_kbuf_req *dma_buf;
 
-    /* workaround */
-#ifndef DMA_SPACE_USR1
-    #define DMA_SPACE_USR1 0x04
-#endif
+    /* Allocate a new kbuf handler structure */
+    dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
 
-#ifndef DMA_SPACE_USR2
-    #define DMA_SPACE_USR2 0x05
-#endif
-
-    dma_buf = ifcdevice->smem_dma_buf;
+    /* Try to allocate kernel buffer */
+    status = ifcfastintdrv_alloc_tscbuf(dma_buf);
+    if (status) {
+        free(dma_buf);
+        LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
+        return status_internal;
+    }
 
     dma_req.src_addr = (dma_addr_t) PP_OFFSET + addr;
-    dma_req.src_space = DMA_SPACE_USR1;
-    dma_req.src_mode = DMA_PCIE_RR2;
+    dma_req.src_space = 4; //DMA_SPACE_USR1
+    dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.des_addr = dma_buf->b_base;
-    //dma_req.des_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
     dma_req.des_space = DMA_SPACE_PCIE | DMA_SPACE_DS;
-    dma_req.des_mode = DMA_PCIE_RR2;
+    dma_req.des_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.end_mode   = 0;
-    dma_req.start_mode = DMA_START_CHAN(0);
+    dma_req.start_mode = (char) DMA_START_CHAN(0);
     dma_req.intr_mode  = DMA_INTR_ENA;
-    dma_req.wait_mode  = 0;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);;
 
     dma_req.size = 4096 | DMA_SIZE_PKT_128;
 
     status = tsc_dma_alloc(0);
     if (status) 
     {
-      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(0);
+        ifcfastintdrv_free_tscbuf(dma_buf);
+        free(dma_buf);
       return status;
     }
 
     status = tsc_dma_move(&dma_req);
-    if (status != 0) {
-        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        return status_read;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
-    
     if (status) 
     {
-      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
-    status = tsc_dma_wait(&dma_req);
-
-    if (status) {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
-    }
-    
-    // * 0x2 << 28 is the interrupt number.
-    // * The board can only read from the shared memory. If we are not reading
-    //   from shared memory the "WR0" will run because the DMA engine first has
-    //   to write the data into the shared memory.
-    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
-    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
-        valid_dma_status |= DMA_STATUS_RUN_WR0;
-    }
-
-    if (dma_req.dma_status != valid_dma_status) {
-        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
-        tsc_dma_free(0);
+        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        tsc_dma_clear(0);
+        ifcfastintdrv_free_tscbuf(dma_buf);
+        free(dma_buf);
         return status_read;
+    }
+
+    /* Check for errors */
+    if (dma_req.dma_status & DMA_STATUS_TMO)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(0);
+    }
+    else if(dma_req[chan].dma_status & DMA_STATUS_ERR)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
     }
     
     /*free DMA channel 0 */
@@ -364,52 +342,14 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
      * TODO: check for errors and fill buffer with zeros??
      */
     memcpy((void *)pp_options, dma_buf->u_base, sizeof(*pp_options));
-#endif
 
-    /***************************************** Legacy code from VME ***************************************/
-#if 0
-    struct tsc_ioctl_dma_req dma_req = {0};
-    struct tsc_ioctl_kbuf_req dma_buf  = {0};
-
-    dma_buf.size = sizeof(*pp_options);
-
-    pevx_buf_alloc(ifcdevice->card, &dma_buf);
-
-    /* PEV Userlib DMA operation call */
-    dma_req.src_addr = PP_OFFSET + addr;
-    dma_req.src_space = DMA_SPACE_USR1;
-    dma_req.src_mode = DMA_PCIE_RR2;
-
-    dma_req.des_addr = (long)dma_buf.b_addr;
-    //dma_req.des_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
-    dma_req.des_space = DMA_SPACE_PCIE | DMA_SPACE_QS;
-    dma_req.des_mode = DMA_PCIE_RR2;
-
-    dma_req.start_mode = DMA_MODE_PIPE;
-    dma_req.intr_mode = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
-
-    dma_req.size = dma_buf.size | DMA_SIZE_PKT_128;
-
-    status = pevx_dma_move(ifcdevice->card, &dma_req);
-
-    /* Copy from kernel space (dma_buf) to userspace (pp_options)
-     * TODO: check for errors and fill buffer with zeros??
-     */
-    memcpy((void *)pp_options, dma_buf.u_addr, sizeof(*pp_options));
-
-    pevx_buf_free(ifcdevice->card, &dma_buf);
-
-    LOG((LEVEL_DEBUG, " addr: 0x%08x, r: 0x%016" PRIx64 ", len:%d\n", PP_OFFSET + addr, *pp_options, dma_buf.size));
-
-    if(status != 0) {
-        LOG((LEVEL_ERROR, "dma_status %08x\n", status));
-        return status_write;
-    }
+    /* Clean memory */
+    ifcfastintdrv_free_tscbuf(dma_buf);
+    free(dma_buf);
 #endif
 
 /********************* Reading TMEM memory space using CPU copy *******************************************/
-
+#if 0
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
 
@@ -426,7 +366,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 
     memcpy((void *)pp_options, mybuffer, sizeof(*pp_options));
     free(mybuffer);
-
+#endif
 /********************************************************************************************************/
 
     return status_success;
@@ -435,46 +375,86 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status;
 
-/******************************** Legacy code from VME *************************************************/
-#if 0
+/********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
+#if 1
     struct tsc_ioctl_dma_req dma_req = {0};
-    struct tsc_ioctl_kbuf_req dma_buf  = {0};
+    struct tsc_ioctl_kbuf_req *dma_buf;
 
-    dma_buf.size = sizeof(pp_options);
+    /* Allocate a new kbuf handler structure */
+    dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
 
-    pevx_buf_alloc(ifcdevice->card, &dma_buf);
+    /* Try to allocate kernel buffer */
+    status = ifcfastintdrv_alloc_tscbuf(dma_buf);
+    if (status) {
+        free(dma_buf);
+        LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
+        return status_internal;
+    }
 
     /* Copy from userspace to kernel space (dma_buf) */
-    memcpy(dma_buf.u_addr, (void *)&pp_options, sizeof(pp_options));
+    memcpy(dma_buf->u_base, (void *)&pp_options, sizeof(pp_options));
 
-    dma_req.src_addr = (long)dma_buf.b_addr;
-    //dma_req.src_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
-    dma_req.src_space = DMA_SPACE_PCIE | DMA_SPACE_QS;
-    dma_req.src_mode = DMA_PCIE_RR2;
+    dma_req.des_addr = (dma_addr_t) PP_OFFSET + addr;
+    dma_req.des_space = 4; //DMA_SPACE_USR1
+    dma_req.des_mode = 0; //DMA_PCIE_RR2;
 
-    dma_req.des_addr = PP_OFFSET + addr;
-    dma_req.des_space = DMA_SPACE_USR1;
-    dma_req.des_mode = DMA_PCIE_RR2;
+    dma_req.src_addr = dma_buf->b_base;
+    dma_req.src_space = DMA_SPACE_PCIE | DMA_SPACE_DS;
+    dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
-    dma_req.start_mode = DMA_MODE_PIPE;
-    dma_req.intr_mode = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = (char) DMA_START_CHAN(0);
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);;
 
-    dma_req.size = dma_buf.size | DMA_SIZE_PKT_128;
+    dma_req.size = 4096 | DMA_SIZE_PKT_128;
 
-    status = pevx_dma_move(ifcdevice->card, &dma_req);
-
-    pevx_buf_free(ifcdevice->card, &dma_buf);
-
-    LOG((LEVEL_DEBUG, "addr: 0x%08x, w: 0x%016" PRIx64 "\n", PP_OFFSET + addr, pp_options));
-
-    if(status != 0) {
-        LOG((LEVEL_ERROR, "dma_status %08x\n", status));
-        return status_write;
+    status = tsc_dma_alloc(0);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(0);
+        ifcfastintdrv_free_tscbuf(dma_buf);
+        free(dma_buf);
+      return status;
     }
+
+    status = tsc_dma_move(&dma_req);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        tsc_dma_clear(0);
+        ifcfastintdrv_free_tscbuf(dma_buf);
+        free(dma_buf);
+        return status_read;
+    }
+
+    /* Check for errors */
+    if (dma_req.dma_status & DMA_STATUS_TMO)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(0);
+    }
+    else if(dma_req[chan].dma_status & DMA_STATUS_ERR)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(0);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status_read;
+    }
+
+    /* Clean memory */
+    ifcfastintdrv_free_tscbuf(dma_buf);
+    free(dma_buf);
 #endif
 
 /*************** Write TMEM address space using CPU copy  ****************************************************/
+#if 0 
     void *mybuffer = calloc(1024*1024,1);
     memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
 
@@ -490,19 +470,59 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
         LOG((LEVEL_ERROR,"tsc_blk_write() returned %d\n", status));
         return status;
     }
-    
+ #endif
 /**************************************************************************************************************/
 
     return status_success;
 }
 
+static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req) {
+    int ret;
+
+    if (!kbuf_req) {
+        return status_internal;
+    }
+
+    /* Default allocation size as 16 kb */
+    kbuf_req->size = 16*1024;
+
+    do {
+        LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", kbuf_req->size));
+        ret = tsc_kbuf_alloc(kbuf_req);
+    } while ((ret < 0) && (kbuf_req->size >>= 1) > 0);
+
+    if(ret) {
+        fprintf(stderr, "Impossible to allocate tsc kbuf\n");
+        return status_internal;
+    }
+
+    /* Mapping kbuf in userspace */
+    if (tsc_kbuf_mmap(kbuf_req) < 0)  
+    {
+        /* Free the kbuf */
+        tsc_kbuf_free(kbuf_req);
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(kbuf_req) failed\n");
+        return status_internal;
+    }
+
+    return status_success;
+}
+
+static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req) {   
+    if (tsc_kbuf_free(kbuf_req))
+    {
+        fprintf(stderr, "[ERROR] tsclib returned error when trying tsc_kbuf_free%s\n");
+        return status_internal;
+    }
+    return status_success;
+}
+
+
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     //void *p;
     int ret;
 
-/************** Currently there is no need for kernel allocation with TSC ***************************/
-
-#if 1    
+    /* Allocate tsc kbuf for the DMA operations */
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
@@ -520,29 +540,18 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         return status_internal;
     }
 
-#endif
-
-#if 0
+    /* Map kernel space in userspace */
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
-        //goto err_mmap_smem;
+    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  
+    {
+        /* Free the kbuf */
+        tsc_kbuf_free(ifcdevice->smem_dma_buf);
+        free(ifcdevice->smem_dma_buf);
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
-    }
-    LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
-#endif
-
-#if 1
-    
-    /* Temporary solution to allocate memory for use with tsc_blk calls */
-    LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
-    ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
-    if(!ifcdevice->sram_blk_buf){
-        fprintf(stderr, "calloc for the sram_blk_buf() failed\n");
         return status_internal;
     }
-
-#endif
     
+    LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
     return status_success;
 }
 
