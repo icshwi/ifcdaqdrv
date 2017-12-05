@@ -189,13 +189,10 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_sram_buf;
     }
 
-    /* If the FMC is ADC3110 / ADC3117 we need tsc_kbuf_mmap to use the DMA operations */
-    if (ifcdevice->board_id != 0x3117) {
-        LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
-        if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
-            //goto err_mmap_sram;
-            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
-        }
+    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
+        //goto err_mmap_sram;
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
     }
 
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -216,13 +213,10 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
-    /* If the FMC is a ADC3110 / 3111 then DMA is functional, so it needs to run tsc_kbuf_mmap */
-    if (ifcdevice->board_id != 0x3117) {
-        LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-        if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
-            //goto err_mmap_smem;
-            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
-        }
+    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
+        //goto err_mmap_smem;
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
     }
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
