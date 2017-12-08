@@ -177,9 +177,6 @@ ifcdaqdrv_status ifcfastint_get_pp_out(struct ifcdaqdrv_usr *ifcuser,
     }
     *analog = i32_reg_val && IFCFASTINT_ANALOG_PP_STATUS_QOUT_MASK;
 
-    printf("Analog  QOUT 0x%08x \n", *analog);
-    printf("Digital QOUT 0x%08x \n", *digital);
-
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }
@@ -836,7 +833,7 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
         // printf("***************************************************************\n");    
         // printf("Reading conf register area before a write operation...\n");
         // ifcfastintdrv_printregister(&pp_options);
-
+        // printf("---------------------------------------------------------------\n");    
 
 		/* Writing a new mode */
 		if(write_mask & IFCFASTINT_ANALOG_MODE_W) {
@@ -882,7 +879,7 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
 
     // printf("What will be written in PP OPTIONS [ADDR = 0x%08x] \n", fpga_mem_address);
     // ifcfastintdrv_printregister(&pp_options);
-
+    // printf("---------------------------------------------------------------\n");
 
     /* WORK AROUND TO READ/WRITE OPERATIONS */
     int max_atempts = 10;
@@ -903,13 +900,19 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
         }
 
         if (pp_options_rb == pp_options) {
-            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
-            break;
+            //INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+            // printf("Reading conf register area after a Successful write operation...\n");
+            // ifcfastintdrv_printregister(&pp_options_rb);
+            // printf("***************************************************************\n\n\n\n");    
+            // break;
         }
     }
 
     if (max_atempts == 0) {
-        INFOLOG(("Failed write operation at address 0x%08x after\n", fpga_mem_address));
+        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+            // printf("Reading conf register area after a FAILED write operation...\n");
+            // ifcfastintdrv_printregister(&pp_options_rb);
+            // printf("***************************************************************\n\n\n\n");    
     }
 
 
@@ -1608,7 +1611,7 @@ ifcdaqdrv_status ifcfastint_set_history_mode(struct ifcdaqdrv_usr *ifcuser, ifcf
     // Set the new mode - the enum should correspond to the regmap
     i32_reg_val |= ((int32_t)hist_mode & 0x07) << IFCFASTINT_FSM_MAN_HISTORY_MODE_SHIFT;
 
-    printf("[ifcdaqdrv - set history mode] Writing 0x%08x to register 0x64\n", i32_reg_val);
+    //printf("[ifcdaqdrv - set history mode] Writing 0x%08x to register 0x64\n", i32_reg_val);
 
     //write register 0x64
     status = ifc_xuser_tcsr_write(ifcdevice, IFCFASTINT_FSM_MAN_REG, i32_reg_val);

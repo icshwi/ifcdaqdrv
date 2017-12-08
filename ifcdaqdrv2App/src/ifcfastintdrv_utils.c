@@ -32,6 +32,26 @@ static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     return 0;
 }
 
+static inline void ifcdaqdrv_swap64(uint64_t* destination)
+{
+    uint64_t source = *destination;
+    uint8_t *byte_ppo;
+    uint8_t *byte_aux;
+
+    byte_ppo = (uint8_t*) destination;
+    byte_aux = (uint8_t*) &source;
+
+    byte_ppo[0] = byte_aux[7];
+    byte_ppo[1] = byte_aux[6];
+    byte_ppo[2] = byte_aux[5];
+    byte_ppo[3] = byte_aux[4];
+    
+    byte_ppo[4] = byte_aux[3];
+    byte_ppo[5] = byte_aux[2];
+    byte_ppo[6] = byte_aux[1];
+    byte_ppo[7] = byte_aux[0];
+}
+
 // static inline void INIT_SECONDARY(struct ifcdaqdrv_dev *ifcdevice, struct ifcdaqdrv_dev *secondary) {
 //     secondary->card = ifcdevice->card;
 //     secondary->fmc = 2;
@@ -42,14 +62,28 @@ static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
 /* Since the IFC Fast Interlock uses both FMCs we initialize both */
 ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
     // Initialize the ADCs, this will
-    pthread_mutex_init(&ifcdevice->sub_lock, NULL);
-    adc3117_init_adc(ifcdevice);
- 
-    /* No secundary FMC is needed */
-    // struct ifcdaqdrv_dev secondary;
-    // INIT_SECONDARY(ifcdevice, &secondary);
-    // adc3110_init_adc(&secondary);
+    ifcdaqdrv_status status;
 
+    pthread_mutex_init(&ifcdevice->sub_lock, NULL);
+    status = adc3117_init_adc(ifcdevice);
+    if (status) 
+        return status;
+ 
+    /* Set ADC inputs to the front panel connector */
+    status = adc3117_set_adc_channel_negative_input(ifcdevice, GND); // ADC channel negative input
+    if (status)
+        return status;
+
+    status = adc3117_set_adc_channel_positive_input(ifcdevice, FROM_CONNECTOR); // ADC channel positive input
+    if (status)
+        return status;
+
+    status = adc3117_configuration_command(ifcdevice); // Send config
+    if (status)
+        return status;
+
+
+    /* Legacy code from VME version */
     int32_t i32regval;
 
     /* Set correct pins on P2 to IN */
@@ -237,7 +271,7 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
     
     /* Activate FMC */
     ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
-    usleep(900000);
+    usleep(10000);
 
     ifcdevice->init_adc = ifcfastintdrv_init_adc;
     ifcdevice->nchannels = 20;
@@ -269,12 +303,13 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     ifcdaqdrv_status status;
 
 /********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
-#if 1
+#if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req *dma_buf;
 
     /* Allocate a new kbuf handler structure */
     dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    dma_buf->size = 4*(0x1000); //sizeof(*pp_options);	
 
     /* Try to allocate kernel buffer */
     status = ifcfastintdrv_alloc_tscbuf(dma_buf);
@@ -289,21 +324,21 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.des_addr = dma_buf->b_base;
-    dma_req.des_space = DMA_SPACE_PCIE | DMA_SPACE_DS;
+    dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
     dma_req.des_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.end_mode   = 0;
-    dma_req.start_mode = (char) DMA_START_CHAN(0);
-    dma_req.intr_mode  = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);;
+    dma_req.start_mode = (char) DMA_START_CHAN(DMA_CHAN_0);
+    //dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
 
-    dma_req.size = 4096 | DMA_SIZE_PKT_128;
+    dma_req.size = 0x08; //dma_buf->size | DMA_SIZE_PKT_128;
 
-    status = tsc_dma_alloc(0);
+    status = tsc_dma_alloc(DMA_CHAN_0);
     if (status) 
     {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
-        tsc_dma_clear(0);
+        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(DMA_CHAN_0) == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(DMA_CHAN_0);
         ifcfastintdrv_free_tscbuf(dma_buf);
         free(dma_buf);
       return status;
@@ -313,7 +348,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     if (status) 
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        tsc_dma_clear(0);
+        tsc_dma_clear(DMA_CHAN_0);
         ifcfastintdrv_free_tscbuf(dma_buf);
         free(dma_buf);
         return status_read;
@@ -323,7 +358,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     if (dma_req.dma_status & DMA_STATUS_TMO)
     {
         LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
-        tsc_dma_clear(0);
+        tsc_dma_clear(DMA_CHAN_0);
     }
     else if(dma_req.dma_status & DMA_STATUS_ERR)
     {
@@ -331,7 +366,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     }
     
     /*free DMA channel 0 */
-    status = tsc_dma_free(0);
+    status = tsc_dma_free(DMA_CHAN_0);
     if (status) 
     {
       LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
@@ -349,7 +384,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 #endif
 
 /********************* Reading TMEM memory space using CPU copy *******************************************/
-#if 0
+#if 1
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
 
@@ -365,6 +400,8 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     }
 
     memcpy((void *)pp_options, mybuffer, sizeof(*pp_options));
+
+    ifcdaqdrv_swap64(pp_options);
     free(mybuffer);
 #endif
 /********************************************************************************************************/
@@ -376,12 +413,13 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     ifcdaqdrv_status status;
 
 /********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
-#if 1
+#if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req *dma_buf;
 
     /* Allocate a new kbuf handler structure */
     dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    dma_buf->size = sizeof(pp_options);
 
     /* Try to allocate kernel buffer */
     status = ifcfastintdrv_alloc_tscbuf(dma_buf);
@@ -407,7 +445,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);;
 
-    dma_req.size = 4096 | DMA_SIZE_PKT_128;
+    dma_req.size = dma_buf->size | DMA_SIZE_PKT_128;
 
     status = tsc_dma_alloc(0);
     if (status) 
@@ -454,8 +492,10 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
 #endif
 
 /*************** Write TMEM address space using CPU copy  ****************************************************/
-#if 0 
+#if 1 
     void *mybuffer = calloc(1024*1024,1);
+
+    ifcdaqdrv_swap64(&pp_options);
     memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
 
     ulong dest_addr = PP_OFFSET + addr;
@@ -484,7 +524,7 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
     }
 
     /* Default allocation size as 16 kb */
-    kbuf_req->size = 16*1024;
+    //kbuf_req->size = 16*1024;
 
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", kbuf_req->size));
