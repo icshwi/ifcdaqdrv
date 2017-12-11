@@ -7,15 +7,13 @@
 #include <sys/ioctl.h>
 #include <pthread.h>
 
-#include "tscioctl.h"
-#include "tsculib.h"
-
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_scope.h"
+#include "i2c.h"
 
 static const uint32_t decimations[] = {1, 2, 5, 10, 20, 50, 100, 200, 0};
 
@@ -528,7 +526,9 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
     /*TODO: check usage of i2c_read. Who is the first argument ? */
     
 #if I2C_SUPPORT_IS_WORKING
-    status  = tsc_i2c_read(device, reg, ui32_reg_val);
+    device = i2cOpen(ifcdevice->fmc == 1 ? "/dev/i2c-0" : "/dev/i2c-1", 0x48);
+    status = i2cWrite(device, reg, 1, 0);
+    status = i2cRead(device, 0, 1, ui32_reg_val);
 
     /* TODO fix bit mask */
     if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {

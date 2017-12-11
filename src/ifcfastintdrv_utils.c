@@ -4,27 +4,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <errno.h>
 
-#include "tsculib.h"
+#include "toscaApi.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-/* Oliver adc3110 -> adc3117 */
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcfastintdrv_utils.h"
-
-static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
-    switch (ifcdevice->sample_size) {
-    case 2:
-        return DMA_SPACE_WS;
-    case 4:
-        return DMA_SPACE_DS;
-    case 8:
-        return DMA_SPACE_QS;
-    }
-    return 0;
-}
 
 static inline void INIT_SECONDARY(struct ifcdaqdrv_dev *ifcdevice, struct ifcdaqdrv_dev *secondary) {
     secondary->card = ifcdevice->card;
@@ -33,7 +21,6 @@ static inline void INIT_SECONDARY(struct ifcdaqdrv_dev *ifcdevice, struct ifcdaq
     pthread_mutex_init(&secondary->sub_lock, NULL);
 }
 
-/* Oliver adc3110 -> adc3117 */
 /* Since the IFC Fast Interlock uses both FMCs we initialize both */
 ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
     // Initialize the ADCs, this will
@@ -239,34 +226,16 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 #define PP_OFFSET 0x100000
 
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
-    ifcdaqdrv_status status;
-    struct tsc_ioctl_dma_req dma_req = {0};
+    ifcdaqdrv_status status = 0;
     struct tsc_ioctl_kbuf_req dma_buf  = {0};
 
     dma_buf.size = sizeof(*pp_options);
+    dma_buf.u_base = valloc(dma_buf.size);
 
-    tsc_kbuf_alloc(&dma_buf);
-
-    dma_req.src_addr = PP_OFFSET + addr;
-    dma_req.src_space = DMA_SPACE_USR;
-    dma_req.src_mode = DMA_PCIE_RR2;
-
-    dma_req.des_addr = (long)dma_buf.b_base;
-    //dma_req.des_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
-    dma_req.des_space = DMA_SPACE_PCIE | DMA_SPACE_QS;
-    dma_req.des_mode = DMA_PCIE_RR2;
-
-    dma_req.start_mode = DMA_START_CHAN(0);
-    dma_req.intr_mode = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
-
-    dma_req.size = dma_buf.size | DMA_SIZE_PKT_128;
-
-    status = tsc_dma_move(&dma_req);
-
+    status = toscaDmaRead(TOSCA_USER1, PP_OFFSET + addr, dma_buf.u_base, dma_buf.size, 4, 0, NULL, NULL);
     memcpy((void *)pp_options, dma_buf.u_base, sizeof(*pp_options));
 
-    tsc_kbuf_free(&dma_buf);
+    free(dma_buf.u_base);
 
     LOG((LEVEL_DEBUG, " addr: 0x%08x, r: 0x%016" PRIx64 ", len:%d\n", PP_OFFSET + addr, *pp_options, dma_buf.size));
 
@@ -279,34 +248,16 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 }
 
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
-    ifcdaqdrv_status status;
-    struct tsc_ioctl_dma_req dma_req = {0};
+    ifcdaqdrv_status status = 0;
     struct tsc_ioctl_kbuf_req dma_buf  = {0};
 
     dma_buf.size = sizeof(pp_options);
-
-    tsc_kbuf_alloc(&dma_buf);
+    dma_buf.u_base = valloc(dma_buf.size);
 
     memcpy(dma_buf.u_base, (void *)&pp_options, sizeof(pp_options));
 
-    dma_req.src_addr = (long)dma_buf.b_base;
-    //dma_req.src_space = DMA_SPACE_PCIE | swap_mask(ifcdevice);
-    dma_req.src_space = DMA_SPACE_PCIE | DMA_SPACE_QS;
-    dma_req.src_mode = DMA_PCIE_RR2;
-
-    dma_req.des_addr = PP_OFFSET + addr;
-    dma_req.des_space = DMA_SPACE_USR;
-    dma_req.des_mode = DMA_PCIE_RR2;
-
-    dma_req.start_mode = DMA_START_CHAN(0);
-    dma_req.intr_mode = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
-
-    dma_req.size = dma_buf.size | DMA_SIZE_PKT_128;
-
-    status = tsc_dma_move(&dma_req);
-
-    tsc_kbuf_free(&dma_buf);
+    status = toscaDmaWrite(dma_buf.u_base, TOSCA_USER1, PP_OFFSET + addr, dma_buf.size, 4, 0, NULL, NULL);
+    free(dma_buf.u_base);
 
     LOG((LEVEL_DEBUG, "addr: 0x%08x, w: 0x%016" PRIx64 "\n", PP_OFFSET + addr, pp_options));
 
@@ -318,7 +269,6 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
 }
 
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
-    int ret;
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
@@ -328,10 +278,10 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
         LOG((LEVEL_INFO, "Trying to allocate %dMiB in kernel\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
-        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
-    } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
+        ifcdevice->smem_dma_buf->u_base = valloc(ifcdevice->smem_dma_buf->size);
+    } while ((errno < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
-    if(ret) {
+    if(ifcdevice->smem_dma_buf->u_base == NULL) {
         free(ifcdevice->smem_dma_buf);
         return status_internal;
     }

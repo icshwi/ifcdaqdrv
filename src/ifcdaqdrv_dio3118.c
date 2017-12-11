@@ -7,15 +7,13 @@
 #include <sys/ioctl.h>
 #include <pthread.h>
 
-#include "tscioctl.h"
-#include "tsculib.h"
-
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_dio3118.h"
 #include "ifcdaqdrv_scope.h"
+#include "i2c.h"
 
 static ifcdaqdrv_status dio3118_check_ttl_cfg(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdaqdrv_status status;
@@ -65,29 +63,20 @@ static ifcdaqdrv_status dio3118_check_ready(struct ifcdaqdrv_dev *ifcdevice) {
 }
 
 static ifcdaqdrv_status __attribute__((unused)) dio3118_get_temperature(struct ifcdaqdrv_dev *ifcdevice, uint32_t *data) {
-    ifcdaqdrv_status  status;
+    ifcdaqdrv_status status = 0;
     uint32_t device = 0x40040048;
-    uint32_t reg_val;
+    uint32_t reg_val, i;
 
     if (!data) {
         return status_argument_invalid;
     }
 
-    if (ifcdevice->fmc == 1) {
-        device |= 0x80000000;
+    for (i = 0; i < 4; i++) {
+        device = i2cOpen(ifcdevice->fmc == 1 ? "/dev/i2c-2" : "/dev/i2c-3", 0x48);
+        status = i2cWrite(device, i, 1, 0);
+        status = i2cRead(device, 0, 1, &reg_val);
+        data[i] = reg_val;
     }
-    else if (ifcdevice->fmc == 2) {
-        device |= 0xa0000000;
-    }
-
-    status = tsc_i2c_read(device, 0, &reg_val);
-    data[0] = reg_val;
-    status = tsc_i2c_read(device, 1, &reg_val);
-    data[1] = reg_val;
-    status = tsc_i2c_read(device, 2, &reg_val);
-    data[2] = reg_val;
-    status = tsc_i2c_read(device, 3, &reg_val);
-    data[3] = reg_val;
 
     return status;
 }

@@ -60,6 +60,18 @@ typedef enum {
     ifcdaqdrv_led_fmc1
 } ifcdaqdrv_led;
 
+/**
+ *@brief DMA buffer for transfer
+ *
+ */
+typedef long dma_addr_t;
+struct tsc_ioctl_kbuf_req
+{
+  uint size;
+  void *k_base;
+  dma_addr_t b_base;
+  void *u_base;
+};
 
 /**
  * @brief Device private struct.
