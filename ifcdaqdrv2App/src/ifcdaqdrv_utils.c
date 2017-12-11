@@ -171,7 +171,7 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
-    ifcdevice->sram_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    ifcdevice->sram_dma_buf = calloc(1, sizeof(struct dma_buffer));
     if (!ifcdevice->sram_dma_buf) {
         goto err_sram_ctl;
     }
@@ -185,9 +185,9 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_sram_buf;
     }
 
-    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct dma_buffer));
     if (!ifcdevice->smem_dma_buf) {
-        fprintf(stderr, "ERROR: calloc(1, sizeof(struct tsc_ioctl_kbuf_req)) failed\n");
+        fprintf(stderr, "ERROR: calloc(1, sizeof(struct dma_buffer)) failed\n");
         goto err_smem_ctl;
     }
 
@@ -237,7 +237,7 @@ err_sram_ctl:
  * @param size Size in bytes to read.
  */
 
-ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
+ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size) {
     int status = 0;
 
     if (!dma_buf || !dma_buf->u_base) {
@@ -264,7 +264,7 @@ static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
  * @param size Size in bytes to read.
  */
 
-ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
+ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size) {
     int status = 0;
     intptr_t src_addr;
     uint32_t current_size;

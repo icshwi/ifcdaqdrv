@@ -64,12 +64,9 @@ typedef enum {
  *@brief DMA buffer for transfer
  *
  */
-typedef long dma_addr_t;
-struct tsc_ioctl_kbuf_req
+struct dma_buffer
 {
   uint size;
-  void *k_base;
-  dma_addr_t b_base;
   void *u_base;
 };
 
@@ -144,8 +141,8 @@ struct ifcdaqdrv_dev {
     ifcdaqdrv_acq_store_mode mode;           /**< In which memory to store acquistition SRAM/SMEM */
     ifcdaqdrv_trigger_type   trigger_type;
 
-    struct tsc_ioctl_kbuf_req    *sram_dma_buf;                /**< Buffer for SRAM DMA transfers */
-    struct tsc_ioctl_kbuf_req    *smem_dma_buf;                /**< Buffer for SMEM DMA transfers */
+    struct dma_buffer       *sram_dma_buf;                /**< Buffer for SRAM DMA transfers */
+    struct dma_buffer       *smem_dma_buf;                /**< Buffer for SMEM DMA transfers */
     void                    *all_ch_buf;                  		/**< Buffer to store raw SMEM data */
     void 					*sram_blk_buf;					/* Buffer to store raw SRAM data */
 
@@ -245,14 +242,10 @@ ifcdaqdrv_status ifc_fmc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int regist
 void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice);
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice);
-//ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-//ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-  ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-// ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dma_addr_t src_addr, uint8_t src_space, uint8_t src_mode, dma_addr_t des_addr, uint8_t des_space, uint8_t des_mode, uint32_t size);
+ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size);
+ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size);
 ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
 ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
-// int ifcdaqdrv_get_sram_pretrig_size(struct ifcdaqdrv_dev *ifcdevice, int *size);
 ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
 ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
 
