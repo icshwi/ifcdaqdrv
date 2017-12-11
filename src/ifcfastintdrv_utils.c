@@ -227,7 +227,7 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
     ifcdaqdrv_status status = 0;
-    struct tsc_ioctl_kbuf_req dma_buf  = {0};
+    struct dma_buffer dma_buf  = {0};
 
     dma_buf.size = sizeof(*pp_options);
     dma_buf.u_base = valloc(dma_buf.size);
@@ -249,7 +249,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status = 0;
-    struct tsc_ioctl_kbuf_req dma_buf  = {0};
+    struct dma_buffer dma_buf  = {0};
 
     dma_buf.size = sizeof(pp_options);
     dma_buf.u_base = valloc(dma_buf.size);
@@ -269,7 +269,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
 }
 
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
-    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct dma_buffer));
     if (!ifcdevice->smem_dma_buf) {
         return status_internal;
     }

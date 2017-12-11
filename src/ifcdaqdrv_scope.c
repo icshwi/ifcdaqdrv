@@ -14,12 +14,9 @@
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_scope.h"
-// #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
 #include "ifcdaqdrv_dio3118.h"
-// #include "ifcdaqdrv_adc3112.h"
-//typedef long dma_addr_t;
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
 #if I2C_SUPPORT_IS_WORKING
