@@ -7,10 +7,6 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#include "tscioctl.h"
-#include "tsculib.h"
-
-
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
