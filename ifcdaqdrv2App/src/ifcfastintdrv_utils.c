@@ -75,13 +75,26 @@ ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
         return status;
 
     status = adc3117_set_adc_channel_positive_input(ifcdevice, FROM_CONNECTOR); // ADC channel positive input
+    //status = adc3117_set_adc_channel_positive_input(ifcdevice, VCAL); // ADC channel positive input
     if (status)
         return status;
+
+    // status = ifc_fmc_tcsr_write(ifcdevice, 0x4, 0x30); //0x80=5V, 0x30=2V
+    // if (status)
+    //     return status;
+
+    // status = ifc_fmc_tcsr_write(ifcdevice, 0x3, 0xCE000000);
+    // if (status)
+    //     return status;
+    // usleep(1000);
+
+    // status = ifc_fmc_tcsr_setclr(ifcdevice, ADC3117_GENERAL_CONFIG_REG, 0x0, 0x3); // VCAL = 0x1 Ref 4.128V, 0x0 var_ref
+    // if (status)
+    //     return status;
 
     status = adc3117_configuration_command(ifcdevice); // Send config
     if (status)
         return status;
-
 
     /* Legacy code from VME version */
     int32_t i32regval;
@@ -112,16 +125,18 @@ ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
     	LOG((LEVEL_ERROR, "Register 0x24 = 0x%8x", i32regval));
 
     /* Reset and set DIRECT mode of FMC support module */
-    ifc_xuser_tcsr_write(ifcdevice, 0x61, 0x01010101);
-    ifc_xuser_tcsr_write(ifcdevice, 0x61, 0x02020202);
-    ifc_xuser_tcsr_write(ifcdevice, 0x62, 0x01010101);
-    ifc_xuser_tcsr_write(ifcdevice, 0x62, 0x02020202);
+    ifc_xuser_tcsr_write(ifcdevice, 0x61, 0x05010101);
+    ifc_xuser_tcsr_write(ifcdevice, 0x61, 0x0A020202);
+    ifc_xuser_tcsr_write(ifcdevice, 0x62, 0x05010101);
+    ifc_xuser_tcsr_write(ifcdevice, 0x62, 0x0A020202);
 
     /* Clear ISERDES (should be 0x00010001) */
     ifc_xuser_tcsr_write(ifcdevice, 0x63, 0x80010025);
     //ifc_xuser_tcsr_write(ifcdevice, 0x63, 0x00010001);
     usleep(100000);
     ifc_xuser_tcsr_write(ifcdevice, 0x63, 0x00000000);
+
+    INFOLOG(("Successfully started ADC3117\n"));
 
     return status_success;
 }
@@ -274,7 +289,7 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
     usleep(10000);
 
     ifcdevice->init_adc = ifcfastintdrv_init_adc;
-    ifcdevice->nchannels = 20;
+    ifcdevice->nchannels = 16; //20 is not working !!!
     ifcdevice->smem_size = 256<<20; //256 MB
     ifcdevice->vref_max = 10.24;
     ifcdevice->sample_resolution = 16;
@@ -390,7 +405,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 
     ulong src_addr = PP_OFFSET + addr;
 
-    usleep(2000);
+    usleep(1000);
     status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
 
     if (status) {
@@ -501,7 +516,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     ulong dest_addr = PP_OFFSET + addr;
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
 
-    usleep(2000);
+    usleep(1000);
     status = tsc_write_blk(dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
     
     free(mybuffer);
@@ -591,7 +606,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         return status_internal;
     }
     
-    LOG((LEVEL_INFO, "Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
+    INFOLOG(("Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
     return status_success;
 }
 
@@ -630,5 +645,208 @@ ifcdaqdrv_status ifcfastintdrv_printregister(uint64_t *pp_register) {
     printf("pp_option_CVAL = 0x%08x\n", value);
 
     printf("\n");
+    return status_success;
+}
+
+
+#define TSCDMA_PKT_SIZE 0x400 // 
+#define CURR_DMA_CHAN DMA_CHAN_2
+
+ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *ifcdevice, 
+                                                        void *dest_buffer, 
+                                                        struct tsc_ioctl_kbuf_req *dma_buf, 
+                                                        uint32_t smem_addr, 
+                                                        uint32_t size) 
+{
+    //return status_success;
+
+    ifcdaqdrv_status status;
+    struct tsc_ioctl_dma_req dma_req = {0};
+
+    dma_req.src_addr = (dma_addr_t) smem_addr;
+    dma_req.src_space = 2; //DMA_SPACE_SMEM
+    dma_req.src_mode = 0; //DMA_PCIE_RR2;
+
+    dma_req.des_addr = dma_buf->b_base;
+    dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
+    dma_req.des_mode = 0; //DMA_PCIE_RR2;
+
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = (char) DMA_START_CHAN(CURR_DMA_CHAN);
+    //dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
+
+    //dma_req.size = size; //dma_buf->size | DMA_SIZE_PKT_128;
+    dma_req.size = size;
+
+    status = tsc_dma_alloc(CURR_DMA_CHAN);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(CURR_DMA_CHAN) == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(CURR_DMA_CHAN);
+        tsc_dma_free(CURR_DMA_CHAN);
+        return status;
+    }
+
+    status = tsc_dma_move(&dma_req);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        tsc_dma_clear(CURR_DMA_CHAN);
+        tsc_dma_free(CURR_DMA_CHAN);
+        return status;
+    }
+
+    /* Check for errors */
+    if (dma_req.dma_status & DMA_STATUS_TMO)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(CURR_DMA_CHAN);
+        tsc_dma_free(CURR_DMA_CHAN);
+        return status;
+    }
+    else if(dma_req.dma_status & DMA_STATUS_ERR)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(CURR_DMA_CHAN);
+        tsc_dma_free(CURR_DMA_CHAN);
+        return status;
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(CURR_DMA_CHAN);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      tsc_dma_clear(CURR_DMA_CHAN);
+      return status;
+    }
+
+    /* Copy from kernel space (dma_buf) to userspace (pp_options)
+     * TODO: check for errors and fill buffer with zeros??
+     */       
+    memcpy(dest_buffer, dma_buf->u_base, (size_t) size);
+    return 0;
+
+#if 0
+    //pointer to hold the next address to be written
+    uint8_t *dest_buffer_p = (uint8_t*) dest_buffer;
+    uint32_t bytes_received  = 0;
+    volatile int i = 0;
+
+
+    while (bytes_received < size)
+    {
+
+        dma_req.src_addr = (dma_addr_t) smem_addr;
+        dma_req.src_space = 2; //DMA_SPACE_SMEM
+        dma_req.src_mode = 0; //DMA_PCIE_RR2;
+
+        dma_req.des_addr = dma_buf->b_base;
+        dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
+        dma_req.des_mode = 0; //DMA_PCIE_RR2;
+
+        dma_req.end_mode   = 0;
+        dma_req.start_mode = (char) DMA_START_CHAN(CURR_DMA_CHAN);
+        //dma_req.intr_mode  = DMA_INTR_ENA;
+        dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
+
+        //dma_req.size = size; //dma_buf->size | DMA_SIZE_PKT_128;
+        dma_req.size = TSCDMA_PKT_SIZE;
+
+        status = tsc_dma_alloc(CURR_DMA_CHAN);
+        if (status) 
+        {
+            LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(CURR_DMA_CHAN) == %d \n", __FUNCTION__, status));
+            tsc_dma_clear(CURR_DMA_CHAN);
+            tsc_dma_free(CURR_DMA_CHAN);
+            break;
+        }
+
+        status = tsc_dma_move(&dma_req);
+        if (status) 
+        {
+            LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+            tsc_dma_clear(CURR_DMA_CHAN);
+            tsc_dma_free(CURR_DMA_CHAN);
+            break;
+        }
+
+        /* Check for errors */
+        if (dma_req.dma_status & DMA_STATUS_TMO)
+        {
+            LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
+            tsc_dma_clear(CURR_DMA_CHAN);
+            tsc_dma_free(CURR_DMA_CHAN);
+            break;
+        }
+        else if(dma_req.dma_status & DMA_STATUS_ERR)
+        {
+            LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
+            tsc_dma_clear(CURR_DMA_CHAN);
+            tsc_dma_free(CURR_DMA_CHAN);
+            break;
+        }
+        
+        /*free DMA channel 0 */
+        status = tsc_dma_free(CURR_DMA_CHAN);
+        if (status) 
+        {
+          LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+          tsc_dma_clear(CURR_DMA_CHAN);
+          break;
+        }
+
+        /* Copy from kernel space (dma_buf) to userspace (pp_options)
+         * TODO: check for errors and fill buffer with zeros??
+         */       
+        if ((size - bytes_received) <  TSCDMA_PKT_SIZE) {
+            memcpy((void*)dest_buffer_p, dma_buf->u_base, (size_t) (size - bytes_received));
+        } else {
+            memcpy((void*)dest_buffer_p, dma_buf->u_base, (size_t) TSCDMA_PKT_SIZE);
+            dest_buffer_p += TSCDMA_PKT_SIZE;
+            smem_addr += TSCDMA_PKT_SIZE;
+        }
+        bytes_received += TSCDMA_PKT_SIZE;
+
+
+        status = status_success;
+        i++;
+        usleep(1000);
+    }
+
+    if (status) {
+        //INFOLOG(("Successful DMA transaction after %d iterations", i));
+        INFOLOG(("DMA ERROR HAPPENED"));
+    }
+    
+    return status;
+
+#endif
+}
+
+#define RT_OFFSET 0x300000
+ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status) 
+{
+    ifcdaqdrv_status status;
+    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    void *mybuffer = calloc(1024*1024,1);
+
+    ulong src_addr = RT_OFFSET + addr;
+
+    usleep(1000);
+    status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*rt_status), blkvar);
+
+    if (status) {
+        LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        free(mybuffer);
+        return status;
+    }
+
+    memcpy((void *)rt_status, mybuffer, sizeof(*rt_status));
+
+    ifcdaqdrv_swap64(rt_status);
+    free(mybuffer);
+
     return status_success;
 }

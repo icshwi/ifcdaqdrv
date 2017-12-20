@@ -65,6 +65,8 @@
 #define IFCFASTINT_ANALOGPP_REG_PPCVAL_MASK		0x000000000000ffff
 #define IFCFASTINT_ANALOGPP_REG_PPCVAL_SHIFT	0
 
+#define IFCFASTINT_BUF_TST_MASK 		0x80000000	
+#define IFCFASTINT_BUF_BIGENDIAN_MASK 	0x40000000	
 
 ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options);
@@ -77,5 +79,14 @@ void ifcfastintdrv_history_reset(struct ifcdaqdrv_dev *ifcdevice);
 void ifcfastint_print_status(int32_t reg);
 
 inline uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset);
+
+
+ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *ifcdevice, 
+                                                        void *dest_buffer, 
+                                                        struct tsc_ioctl_kbuf_req *dma_buf, 
+                                                        uint32_t smem_addr, 
+                                                        uint32_t size);
+
+ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status);
 
 #endif /* _IFCFASTINT_UTILS_H_ */

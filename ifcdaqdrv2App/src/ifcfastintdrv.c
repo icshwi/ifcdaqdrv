@@ -46,14 +46,18 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Initialize history buffer size and pointers */
     /* Maximize to 65k values for now */
-//    intptr_t buf_start = 0x00100000;
-//    intptr_t buf_end   = 0x00300000;
+   // intptr_t buf_start = 0x00000040;
+   // intptr_t buf_end   = 0x00100000;
 
     /* Use maximum size of the memory (256 MB) */
     intptr_t buf_start = 0x00000000;
-    intptr_t buf_end   = 0x0FF00000;
+    intptr_t buf_end   = 0x00100000;
 
     i32_reg_val = buf_end + (buf_start >> 16);
+
+    //i32_reg_val |= IFCFASTINT_BUF_TST_MASK;         // TESING !!
+    i32_reg_val |= IFCFASTINT_BUF_BIGENDIAN_MASK;   // BIG ENDIAN ON HIST BUFFER
+
 
     status = ifc_xuser_tcsr_write(ifcdevice, IFCFASTINT_BUF_SIZE_REG, i32_reg_val);
     if(status) {
@@ -77,14 +81,17 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     }
     //usleep(10000);
 
-    /* Reset FSM. Set it to IDLE. */
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_FSM_MAN_REG,
-            3 << IFCFASTINT_FSM_MAN_FSM_CMD_SHIFT,
-            IFCFASTINT_FSM_MAN_FSM_CMD_MASK);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status_internal;
-    }
+    /* DO NOT Reset FSM !!!!!!!!!!!!!!!!! */
+#if 0
+    
+        status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_FSM_MAN_REG,
+                3 << IFCFASTINT_FSM_MAN_FSM_CMD_SHIFT,
+                IFCFASTINT_FSM_MAN_FSM_CMD_MASK);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status_internal;
+        }
+#endif
 
     ifcfastintdrv_history_reset(ifcdevice);
 
@@ -208,6 +215,11 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
+
+    //printf("-----------> Reg 0x68 = 0x%08x\n", i32_reg_val);
+
+    i32_reg_val &= 0x3fffffff; // CLEANING TST AND ENDIAN BITS!!!!
+
     buf_start = ((i32_reg_val & 0xFFFF) << 16) + 64; // First history slot is special
     buf_end = (i32_reg_val & 0xFFFF0000); // This points to first item *after* the buffer
     buf_size = buf_end - buf_start;
@@ -236,10 +248,12 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     content_start = content_end - size;
 
 
-    /* No HISTORY BUFFER reading */
+    /* No HISTORY BUFFER reading *************************************************************************/
+    // forcing last frame to be 64*100 0x1900
+    content_start = 0x1900;
 
-#if 0    
-    ifcdaqdrv_read_smem_unlocked(
+#if 1    
+    ifcfastintdrv_read_smem_historybuffer(
             ifcdevice,
             data,
             ifcdevice->smem_dma_buf,
@@ -295,10 +309,15 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
-    buf_start = ((i32_reg_val & 0xFFFF) << 16) + 64; // First history slot is special
-    buf_end = (i32_reg_val & 0xFFFF0000); // This points to first item *after* the buffer
-    buf_size = buf_end - buf_start;
 
+    //printf("-----------> Reg 0x68 = 0x%08x\n", i32_reg_val);
+
+    buf_start = ((i32_reg_val & 0xFFFF) << 16) + 64; // First history slot is special
+    buf_end = (i32_reg_val & 0x1FFF0000); // This points to first item *after* the buffer
+    buf_size = buf_end - buf_start;
+/**************************************************************************************/
+    buf_size = 0x20000;
+/*****************************************************************************************/
     intptr_t content_start;
     intptr_t content_end;
     // Store read pointer in `content_start`
@@ -324,6 +343,12 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
             content_end += buf_size;
     }
 
+    /***************************************************************************************************************/
+    content_end = 0x20000;
+    content_start = 64 * 3;
+    /***************************************************************************************************************/
+
+
     if(content_end < buf_start || content_start < buf_start) {
         LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
         LOG((LEVEL_ERROR, "%s\n", "Internal error.. Content pointers are outside buffer area."));
@@ -332,6 +357,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
 
     LOG((LEVEL_DEBUG, "buffer start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR " content start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
+    //INFOLOG(("buffer start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR " content start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
 
     if (!count && content_end > content_start) {
         size = content_end - content_start;
@@ -345,7 +371,8 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     *nelm = size/64;
 
     // New content_start. `content_start` might end up outside the buffer
-    content_start = content_end - size;
+    //content_start = content_end - size;
+    /************************************************************************************************************/
 
     // Bail early if 0 frames was found
     if(!size) {
@@ -353,11 +380,11 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         return status_success;
     }
 
-#if 0
+#if 1
     // Check if `content_start` is outside buffer
     if(content_start > buf_start) {
         LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) in order\n", *nelm, size));
-        ifcdaqdrv_read_smem_unlocked(
+        ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
                 ifcdevice->smem_dma_buf,
@@ -368,14 +395,14 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         content_start += buf_size;
         LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) out of order. CE %08" PRIxPTR ", BS %08" PRIxPTR "\n",
                     *nelm, size, content_end - size, buf_start));
-        ifcdaqdrv_read_smem_unlocked(
+        ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
                 ifcdevice->smem_dma_buf,
                 content_start,
                 buf_end - content_start
         );
-        ifcdaqdrv_read_smem_unlocked(
+        ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data + (buf_end - content_start),
                 ifcdevice->smem_dma_buf,
@@ -661,7 +688,7 @@ ifcdaqdrv_status ifcfastint_get_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
     	/* Read the configuration (OPTION1) of the standard analog input pre-processing block. */
     	fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + block*8; // OPTION1 registers starts at 0x200
 
-    	usleep(10000);
+    	usleep(1000);
         /* Read first time */
         status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
     	if(status) {
@@ -732,7 +759,7 @@ ifcdaqdrv_status ifcfastint_get_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
     fpga_mem_address = 0x600 + (block*16);
 
     pthread_mutex_lock(&ifcdevice->lock);
-    usleep(10000);
+    usleep(1000);
     status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
@@ -751,7 +778,7 @@ ifcdaqdrv_status ifcfastint_get_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
 
     /* Prepares to read OPTION2 configuration (starts at 0x600) */
    	fpga_mem_address = 0x608 + (block*16);
-    usleep(10000);
+    usleep(1000);
    	status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
    	if(status) {
    		pthread_mutex_unlock(&ifcdevice->lock);
@@ -904,16 +931,20 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
             // printf("Reading conf register area after a Successful write operation...\n");
             // ifcfastintdrv_printregister(&pp_options_rb);
             // printf("***************************************************************\n\n\n\n");    
-            // break;
+            break;
         }
     }
 
-    if (max_atempts == 0) {
-        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-            // printf("Reading conf register area after a FAILED write operation...\n");
-            // ifcfastintdrv_printregister(&pp_options_rb);
-            // printf("***************************************************************\n\n\n\n");    
-    }
+    // if (max_atempts == 0) {
+    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+    //     printf("***************************************************************\n");    
+    //     printf("What would be written in PP OPTIONS [ADDR = 0x%08x] \n", fpga_mem_address);
+    //     ifcfastintdrv_printregister(&pp_options);
+    //     printf("---------------------------------------------------------------\n");
+    //     printf("Reading conf register area after a FAILED write operation...\n");
+    //     ifcfastintdrv_printregister(&pp_options_rb);
+    //     printf("***************************************************************\n\n\n\n");    
+    // }
 
 
     /* OPTION2 is not necessary if pp block is not pwravg */
@@ -1079,9 +1110,9 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
         }
     }
 
-    if (max_atempts == 0) {
-        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    }
+    // if (max_atempts == 0) {
+    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+    // }
 
     /* Write OPTION2 configuration space */
 
@@ -1122,9 +1153,9 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
         }
     }
 
-    if (max_atempts == 0) {
-        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    }
+    // if (max_atempts == 0) {
+    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+    // }
 
     // TODO(nc): unmagicify
     if(write_mask & IFCFASTINT_ANALOG_IDLE2PRE_W) {
@@ -1189,7 +1220,7 @@ ifcdaqdrv_status ifcfastint_get_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
     fpga_mem_address = 0x100 + block*8;
 
     pthread_mutex_lock(&ifcdevice->lock);
-    usleep(10000);
+    usleep(1000);
     status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options1);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
@@ -1314,9 +1345,9 @@ ifcdaqdrv_status ifcfastint_set_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
         }
     }
 
-    if (max_atempts == 0) {
-        INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    }
+    // if (max_atempts == 0) {
+    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
+    // }
 
     // TODO(nc): unmagicify
     if(write_mask & IFCFASTINT_DIGITAL_IDLE2PRE_W) {
@@ -1795,5 +1826,68 @@ ifcdaqdrv_status ifcfastint_get_statusreg(struct ifcdaqdrv_usr *ifcuser, int32_t
     *regval = i32_reg_val;
     pthread_mutex_unlock(&ifcdevice->lock);
 
+    return status_success;
+}
+
+
+ifcdaqdrv_status ifcfastint_get_rtstatus(struct ifcdaqdrv_usr *ifcuser,
+                                         uint32_t aichannel,
+                                         uint32_t *value,
+                                         ifcfastint_analog_pp analog_pp_type)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    uint32_t fpga_mem_address;
+    uint64_t rt_status_result;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    /* Current firmware supports only 4 pwravg blocks */
+    if(aichannel >= 16) {
+        return status_argument_range;
+    }
+
+    if(!value) {
+        return status_argument_invalid;
+    }
+
+    /* Currently only supports PULSE WIDTH and PULSE RATE */
+    if ((analog_pp_type != ifcfastint_analog_pp_pulshp) && (analog_pp_type != ifcfastint_analog_pp_pulrate))
+    {
+        return status_argument_invalid;   
+    }
+
+    /* Sets the offset address on TMEM4_1 that holds OPTION1 configuration */
+    if (analog_pp_type == ifcfastint_analog_pp_pulshp)
+        fpga_mem_address = (aichannel*8);
+
+    if (analog_pp_type == ifcfastint_analog_pp_pulrate)
+        fpga_mem_address = 0x100 + (aichannel*8);
+    
+    pthread_mutex_lock(&ifcdevice->lock);
+    status = ifcfastintdrv_read_rtstatus(ifcdevice, fpga_mem_address, &rt_status_result);
+    if(status) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        *value = 0;
+        return status_internal;
+    }
+
+    /* Extracts the desired value  */
+    if (analog_pp_type == ifcfastint_analog_pp_pulshp){
+        *value = (uint32_t) ((rt_status_result & 0x0000FFFF00000000) >> 32);
+    }
+
+    if (analog_pp_type == ifcfastint_analog_pp_pulrate){
+        *value = (uint32_t) ((rt_status_result & 0x00FFFFFF00000000) >> 32);
+            // printf("Reading PULSE RATE RT Status channel %d \n", aichannel);
+            // printf("64 bit reg = 0x%" PRIx64 "\n", rt_status_result);
+            // printf("Value extracted = %d \n", *value);
+            // printf("---------------------------\n");
+    }
+
+    pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }

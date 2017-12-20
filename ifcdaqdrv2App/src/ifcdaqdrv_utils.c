@@ -228,6 +228,141 @@ err_sram_ctl:
     return status_internal;
 }
 
+/**
+ * This is a helper function that reads from FPGA Block RAM named USR1 for FMC1 or USR2 for FMC2.
+ * b_addr (bus address) should be a pev_ioctl_dma_req compatible des_addr pointer.
+ *
+ * @param ifdevice
+ * @param offset Byte addressed offset
+ * @param size Size in bytes
+ */
+ifcdaqdrv_status 
+ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
+			    , dma_addr_t src_addr
+			    , uint8_t src_space
+			    , uint8_t src_mode
+			    , dma_addr_t des_addr
+			    , uint8_t des_space
+			    , uint8_t des_mode
+			    , uint32_t size) 
+{
+    struct tsc_ioctl_dma_req dma_req = {0};
+
+    int status;
+    uint32_t valid_dma_status;
+    struct tsc_ioctl_dma_sts dma_sts;
+
+    /* Assuming that we are using channel ZERO */
+    
+#if 0 //#ifdef PEV_MOV_MODE 
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = src_mode;
+
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space;
+    dma_req.des_mode  = des_mode;
+
+    dma_req.size       = size;
+
+    dma_req.start_mode = DMA_START_PIPE;
+    dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
+#endif
+
+    /* Based on TscMon source code */
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = 0;
+
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space;
+    dma_req.des_mode  = 0;
+
+    dma_req.size       = size;
+
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = DMA_START_CHAN(0);
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = 0;
+
+    status = tsc_dma_alloc(0);
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    status = tsc_dma_move(&dma_req);
+    if (status != 0) {
+        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        return status_read;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
+    status = tsc_dma_wait(&dma_req);
+
+    if (status) {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
+    }
+    
+    // * 0x2 << 28 is the interrupt number.
+    // * The board can only read from the shared memory. If we are not reading
+    //   from shared memory the "WR0" will run because the DMA engine first has
+    //   to write the data into the shared memory.
+    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
+    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
+        valid_dma_status |= DMA_STATUS_RUN_WR0;
+    }
+
+    if (dma_req.dma_status != valid_dma_status) {
+        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+        tsc_dma_clear(0);
+        usleep(1000);
+        tsc_dma_free(0);
+        usleep(1000);
+        return status_read;
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(0);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status_read;
+    }
+    return  status_success;
+}
+
+static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
+    switch (ifcdevice->sample_size) {
+    case 2:
+        return DMA_SPACE_WS;
+    case 4:
+        return DMA_SPACE_DS;
+    case 8:
+        return DMA_SPACE_QS;
+    }
+    return 0;
+}
+
 /*
  * This function reads /size/ bytes from /offset/ in SRAM (FPGA Block Ram) to /dma_buf/.
  *
@@ -285,7 +420,29 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
             current_size = size;
         }
 
-        status = toscaDmaRead(TOSCA_SMEM1, offset, dma_buf->u_base, current_size, 4, 0, NULL, NULL);
+        // dma_buf is already dma_addr_t
+        // src_addr sholud be casted
+
+#if 0
+	printf(" [smem_read] dma_buf->size = %"PRIu32" \n", dma_buf->size);
+	printf(" [smem_read] dma_buf->size = 0x%08x \n", dma_buf->size);
+	printf(" [smem_read] curr_size = %"PRIu32" \n", current_size);
+	printf(" [smem_read] curr_size = 0x%08x \n", current_size);
+	printf(" [smem_read] size = %"PRIu32" \n", size);
+	printf(" [smem_read] size = 0x%08x \n", size);
+#endif
+
+	/*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
+        status = ifcdaqdrv_dma_read_unlocked(
+					     ifcdevice,
+					     (dma_addr_t) src_addr, 
+					     DMA_SPACE_SHM, 
+					     DMA_PCIE_RR2,
+					     dma_buf->b_base, 
+					     DMA_SPACE_PCIE, 
+					     DMA_PCIE_RR2,
+					     current_size | DMA_SIZE_PKT_1K
+					     );
 
         if (status != 0) {
             return status;
