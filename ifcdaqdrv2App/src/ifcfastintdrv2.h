@@ -103,6 +103,7 @@ typedef enum {
 	ifcfastint_history_ended
 } ifcfastint_hist_state;
 
+
 /* Masks used on history mode configuration to identify which options will write */
 #define IFCFASTINT_HISTORY_ENABLE_W	(1<<0)
 #define IFCFASTINT_HISTORY_MODE_W	(1<<1)
@@ -437,6 +438,12 @@ ifcdaqdrv_status ifcfastint_get_history_flags(struct ifcdaqdrv_usr *ifcuser, int
 ifcdaqdrv_status ifcfastint_get_history_acqstate(struct ifcdaqdrv_usr *ifcuser, ifcfastint_hist_state *state);
 ifcdaqdrv_status ifcfastint_get_statusreg(struct ifcdaqdrv_usr *ifcuser, int32_t *regval);
 ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *data);
+
+ifcdaqdrv_status ifcfastint_get_rtstatus(struct ifcdaqdrv_usr *ifcuser,
+                                         uint32_t aichannel,
+                                         uint32_t *value,
+                                         ifcfastint_analog_pp analog_pp_type);
+
 
 #ifdef __cplusplus
 }

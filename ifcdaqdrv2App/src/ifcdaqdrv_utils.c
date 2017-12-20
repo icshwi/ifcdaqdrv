@@ -335,7 +335,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.src_mode  = 0;
 
     dma_req.des_addr  = des_addr;
-    dma_req.des_space = des_space | DMA_SPACE_DS;
+    dma_req.des_space = des_space;
     dma_req.des_mode  = 0;
 
     dma_req.size       = size;
@@ -393,7 +393,10 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 
     if (dma_req.dma_status != valid_dma_status) {
         LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+        tsc_dma_clear(0);
+        usleep(1000);
         tsc_dma_free(0);
+        usleep(1000);
         return status_read;
     }
     
@@ -546,7 +549,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
 					     dma_buf->b_base, 
-					     DMA_SPACE_PCIE | DMA_SPACE_WS, 
+					     DMA_SPACE_PCIE, 
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
 					     );
