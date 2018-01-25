@@ -28,9 +28,10 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_
     for (i = 0; i < 8; i++) {
         device = i2cOpen("/dev/i2c-2", ifcdevice->fmc == 2 ? 0x52 : 0x50);
         status = i2cWrite(device, 0x70, 1, i);
-        status = i2cRead(device, 0, 1, &reg_val);
+        status = i2cRead(device, 0, 0, &reg_val);
         data[i] = reg_val;
     }
+    close(device);
 
     return status;
 }
