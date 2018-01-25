@@ -9,8 +9,6 @@ DIRS += $(wildcard *App)
 DIRS += $(wildcard *Top)
 DIRS += $(wildcard iocBoot)
 
-# The build order is controlled by these dependency rules:
-
 # All dirs except configure depend on configure
 $(foreach dir, $(filter-out configure, $(DIRS)), \
     $(eval $(dir)_DEPEND_DIRS += configure))
