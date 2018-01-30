@@ -5,18 +5,17 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "tscioctl.h"
-#include "tsculib.h"
-
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 
+#include "i2c.h"
+
 ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_t *data){
-    int32_t  status, i;
+    int32_t  status = 0, i;
     uint32_t device = 0x40010050;
-    uint32_t reg_val;
+    uint8_t reg_val;
 
     if (!data) {
         return status_argument_invalid;
@@ -27,9 +26,12 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_
     }
 
     for (i = 0; i < 8; i++) {
-        status = tsc_i2c_read(device, 0x7000 + i, &reg_val);
-        data[i] = (uint8_t)reg_val;
+        device = i2cOpen("/dev/i2c-2", ifcdevice->fmc == 2 ? 0x52 : 0x50);
+        status = i2cWrite(device, 0x70, 1, i);
+        status = i2cRead(device, 0, 0, &reg_val);
+        data[i] = reg_val;
     }
+    close(device);
 
     return status;
 }
@@ -37,7 +39,7 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_
 ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t address, uint8_t *data){
     int  status = 0;
     uint device = 0x01010051;
-    uint reg_val;
+    uint reg_val = 0;
 
     if (!data) {
         return status_argument_invalid;
@@ -60,11 +62,13 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
 #if I2C_SUPPORT_IS_WORKING
 
     /* TODO: this might be incompatible */
-    if ((device & 0x30000) == 0x10000) {
+    /*if ((device & 0x30000) == 0x10000) {
         address = tsc_swap_16(address);
-    }
-    
-    status = tsc_i2c_read(device, address, &reg_val);
+    }*/
+
+    device = i2cOpen("/dev/i2c-0", ifcdevice->fmc == 2 ? 0x51 : 0x52);
+    status = i2cWrite(device, address, 1, 0);
+    status = i2cRead(device, 0, 1, &reg_val);
     if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
         LOG((LEVEL_ERROR,"While calling tsc_i2c_read(), the device did not reply the ack\n"));
         return status_i2c_nack;
