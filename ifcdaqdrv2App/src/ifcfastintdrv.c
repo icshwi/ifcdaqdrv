@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <ifcdaqdrv2.h>
+#include "ifcdaqdrv_dio3118.h"
 
 #include "debug.h"
 #include "ifcdaqdrv_utils.h"
@@ -441,6 +442,7 @@ ifcdaqdrv_status ifcfastint_fsm_reset(struct ifcdaqdrv_usr *ifcuser) {
     status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_FSM_MAN_REG,
             3 << IFCFASTINT_FSM_MAN_FSM_CMD_SHIFT,
             IFCFASTINT_FSM_MAN_FSM_CMD_MASK);
+    
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_internal;
@@ -1104,18 +1106,14 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
             return status_internal;
         }
 
-        if (pp_options_rb == pp_options) {
-            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
-            break;
-        }
+        // if (pp_options_rb == pp_options) {
+        //     INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+        //     break;
+        // }
     }
 
-    // if (max_atempts == 0) {
-    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    // }
 
     /* Write OPTION2 configuration space */
-
     fpga_mem_address = 0x608 + (block*16);
     status = ifcfastintdrv_read_pp_conf(ifcdevice, fpga_mem_address, &pp_options);
     if(status) {
@@ -1147,15 +1145,11 @@ ifcdaqdrv_status ifcfastint_set_conf_pwravg_pp(struct ifcdaqdrv_usr *ifcuser,
             return status_internal;
         }
 
-        if (pp_options_rb == pp_options) {
-            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
-            break;
-        }
+        // if (pp_options_rb == pp_options) {
+        //     INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+        //     break;
+        // }
     }
-
-    // if (max_atempts == 0) {
-    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    // }
 
     // TODO(nc): unmagicify
     if(write_mask & IFCFASTINT_ANALOG_IDLE2PRE_W) {
@@ -1339,15 +1333,11 @@ ifcdaqdrv_status ifcfastint_set_conf_digital_pp(struct ifcdaqdrv_usr *ifcuser,
             return status_internal;
         }
 
-        if (pp_options_rb == pp_options) {
-            INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
-            break;
-        }
+        // if (pp_options_rb == pp_options) {
+        //     INFOLOG(("Successful write operation at address 0x%08x after %d attempts\n", fpga_mem_address, (10-(max_atempts-1))));
+        //     break;
+        // }
     }
-
-    // if (max_atempts == 0) {
-    //     INFOLOG(("Failed write operation at address 0x%08x\n", fpga_mem_address));
-    // }
 
     // TODO(nc): unmagicify
     if(write_mask & IFCFASTINT_DIGITAL_IDLE2PRE_W) {
@@ -1889,5 +1879,27 @@ ifcdaqdrv_status ifcfastint_get_rtstatus(struct ifcdaqdrv_usr *ifcuser,
     }
 
     pthread_mutex_unlock(&ifcdevice->lock);
+    return status_success;
+}
+
+
+ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+   
+    /* Activate FMC Write 0x3118 in the signature register -> 0x03000050*/
+    ifc_tcsr_write(ifcdevice, 0x1000, 0xC0, 0x31180000);
+    usleep(1000);
+
+    ifc_tcsr_write(ifcdevice, 0x1000, 0xC1, 0x03000050);
+
+    /* output enables */
+    ifc_tcsr_write(ifcdevice, 0x1000, 0xC9, 0x001fffff);    
+
     return status_success;
 }

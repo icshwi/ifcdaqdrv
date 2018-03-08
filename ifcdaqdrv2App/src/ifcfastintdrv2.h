@@ -14,6 +14,9 @@ extern "C" {
 #define IFC1210FASTINT_XUSER_SIGNATURE 0x12100901
 #define IFC1210FASTINT_APP_SIGNATURE   0x12340201
 
+#define IFCFASTINT_CHANGESTATE  0x00
+#define IFCFASTINT_KEEPSTATE    0x01
+
 
 /*
  * @brief Pre-processing modes for analog input
@@ -443,6 +446,8 @@ ifcdaqdrv_status ifcfastint_get_rtstatus(struct ifcdaqdrv_usr *ifcuser,
                                          uint32_t aichannel,
                                          uint32_t *value,
                                          ifcfastint_analog_pp analog_pp_type);
+
+ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser);
 
 
 #ifdef __cplusplus
