@@ -339,7 +339,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     return status_success;
 }
 
-inline uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset) {
+uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset) {
     uint64_t output = input & ~(mask << offset); // Clear mask
     output |= bits << offset; // Set bits
     return output;

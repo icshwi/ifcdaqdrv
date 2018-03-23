@@ -159,6 +159,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
 #if I2C_SUPPORT_IS_WORKING
     LOG((LEVEL_NOTICE, "Trying to read EEPROM\n"));
     ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
+#else
+    strcpy(ifcdevice->fru_id->product_name, "ADC3110");
 #endif
     
     /*
