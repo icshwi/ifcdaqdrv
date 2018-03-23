@@ -37,6 +37,7 @@ ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3110_init_adc(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status adc3110_adc_init_priv(struct ifcdaqdrv_dev *ifcdevice, ADC3110_SBCDEVICE device);
+ifcdaqdrv_status adc3110_adc_init_priv_new(struct ifcdaqdrv_dev *ifcdevice, ADC3110_SBCDEVICE device);
 
 ifcdaqdrv_status adc3110_set_led(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_led led, ifcdaqdrv_led_state led_state);
 ifcdaqdrv_status adc3110_set_dataformat(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_dataformat dataformat);

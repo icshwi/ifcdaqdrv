@@ -782,6 +782,44 @@ ifcdaqdrv_status adc3110_adc_init_priv(struct ifcdaqdrv_dev *ifcdevice, ADC3110_
     return res != 0 ? -1 : status_success;
 }
 
+ifcdaqdrv_status adc3110_adc_init_priv_new(struct ifcdaqdrv_dev *ifcdevice, ADC3110_SBCDEVICE device){
+    int res = 0;
+
+    /* Initialization based on IOxOS TscMon script */
+
+    usleep(20000);
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x08, 0x19); // ADS42LB69_Reg 0x08 RESET device
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x04, 0x00); // ADS42LB69_Reg 0x04 LVDS electrical level
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x05, 0x00); // ADS42LB69_Reg 0x05 LVDS electrical level
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x06, 0x00); // ADS42LB69_Reg 0x06 LVDS CLKDIV=0 : Bypassed
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x07, 0x00); // ADS42LB69_Reg 0x07 SYNC_IN delay = 0 ps
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x08, 0x18); // ADS42LB69_Reg 0x08 Data format = 2s complement ????
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x0B, 0x00); // ADS42LB69_Reg 0x0B Channel A(even) Gain disabled 0dB / No Flip
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x0C, 0x00); // ADS42LB69_Reg 0x0C Channel B(odd) Gain disabled 0dB / No Flip
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x0D, 0x00); // ADS42LB69_Reg 0x0D OVR pin normal
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x0F, 0x00); // ADS42LB69_Reg 0x0F Normal operation
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x14, 0x00); // ADS42LB69_Reg 0x14 LVDS strenght (default DATA/CLK)
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x15, 0x01); // ADS42LB69_Reg 0x15 DDR LVDS Mode enabled
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x16, 0x20); // ADS42LB69_Reg 0x16 DDR Timing 0ps + 500ps(default)
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x17, 0x00); // ADS42LB69_Reg 0x17 QDR CLKOUT delay
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x18, 0x00); // ADS42LB69_Reg 0x18 QDR CLKOUT timing
+
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x1F, 0xFF); // ADS42LB69_Reg 0x1F Fast OVR
+    res += adc3110_SerialBus_write(ifcdevice, device, 0x30, 0x00); // ADS42LB69_Reg 0x30 SYNC IN disabled
+
+    if (res == 0) {
+        INFOLOG(("ADC group %d initialized \n", (int) device));
+    }
+
+    return res != 0 ? -1 : status_success;
+}
+
+
 ifcdaqdrv_status adc3110_ADC_setOffset(struct ifcdaqdrv_dev *ifcdevice, unsigned channel, uint16_t offset){
     int               status = 0;
     int32_t           reg;
@@ -1142,13 +1180,66 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_set_led(ifcdevice, ifcdaqdrv_led_fmc1, ifcdaqdrv_led_blink_slow);
 
     /* -----------------------------Starting initialization procedure -------------------------- */
+    /* ------------------------------based on IOxOS TscMon scripts ------------------------------*/
 
-    // Power down ADS #01 #23 #4567 
-    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1D00);
-    usleep(2000);
+    // Reset ADS42LB69
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0xfa003d00);
+    usleep(1000);
 
-    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0); // Release RESET on all ADS
-    ifc_fmc_tcsr_write(ifcdevice, 0x02, 0); // LED_MGT FP Led  power-off + oscillator 100  power-off
+    // OFCT -> GPIO high impedance
+    ifc_fmc_tcsr_write(ifcdevice, 0x05, 0x00000000);
+
+    // Release power down ADC01
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x3900);
+    usleep(1000);
+    // Release power down ADC23
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x3100);
+    usleep(1000);
+    // Release power down ADC4567
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x2100);
+    usleep(1000);
+    // Release power down ADC09
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x100);
+    usleep(1000);
+
+    /* Generate ADC + ADCRX_PLL + ADCALL_PLL RESET */
+    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x100); // activate RESET
+    // usleep(100);
+
+    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x00000000); // deactivate RESET
+    // usleep(100);
+
+    /*
+    .
+    .
+    .   SHOULD WE EXECUTE THE IDELAY CALIBRATION HERE?
+    .
+    */
+
+    // /* --------------------------------Configuring the ADCs --------------------------------------*/
+    
+    adc3110_adc_init_priv_new(ifcdevice, ADS01);
+    adc3110_adc_init_priv_new(ifcdevice, ADS23);
+    adc3110_adc_init_priv_new(ifcdevice, ADS45);
+    adc3110_adc_init_priv_new(ifcdevice, ADS67);
+
+    // disable gain, set gain to 1 on all channels
+    int i = 0;
+    for (i = 0; i < 8; ++i) {
+        adc3110_set_gain(ifcdevice, i, 1);
+    }
+
+    // Issues with signed dataformat.
+    adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
+    /***************************************************************************************************/
+
+
+    // // Power down ADS #01 #23 #4567 
+    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x1D00);
+    // usleep(2000);
+
+    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0); // Release RESET on all ADS
+    // ifc_fmc_tcsr_write(ifcdevice, 0x02, 0); // LED_MGT FP Led  power-off + oscillator 100  power-off
 
     /*
      * Setup LMK04906
@@ -1199,27 +1290,42 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1F, 0x00000000); // LMK04906_R31 uWIRE Not LOCK
 
     /* ----------------------Enable Internal 100 MHz clock from  +OSC575 ------------------------ */
-    ifc_fmc_tcsr_write(ifcdevice, 0x02, 0x80000003);
+    ifc_fmc_tcsr_write(ifcdevice, 0x02, 0x8000000A);
     usleep(2000);
 
     adc3110_SerialBus_write(ifcdevice, LMK04906, 0x1E, 0x02000320); // LMK04906_R30 /PLL2_P = 2 PLL2_N = 25
     usleep(20000);
 
-    /* --------------------------------Configuring the ADCs --------------------------------------*/
-    
-    adc3110_adc_init_priv(ifcdevice, ADS01);
-    adc3110_adc_init_priv(ifcdevice, ADS23);
-    adc3110_adc_init_priv(ifcdevice, ADS45);
-    adc3110_adc_init_priv(ifcdevice, ADS67);
+    /* Check PLL2 is locked */
+    int32_t   regvalue;
+    ifc_fmc_tcsr_read(ifcdevice, 1, &regvalue);
 
-    // disable gain, set gain to 1 on all channels
-    int i = 0;
-    for (i = 0; i < 8; ++i) {
-        adc3110_set_gain(ifcdevice, i, 1);
+    if (regvalue & 0x00100000) {
+        INFOLOG(("PLL2 of LMK04806 is locked! \n"));
     }
 
-    // Issues with signed dataformat.
-    adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
+    /* Reset FPGA PLL and then release all ADC RESET, allowing to forward the clock reference to FPGA */
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x00004000);
+    usleep(200);
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x00000000);
+    usleep(5000);
+
+
+    // /* --------------------------------Configuring the ADCs --------------------------------------*/
+    
+    // adc3110_adc_init_priv(ifcdevice, ADS01);
+    // adc3110_adc_init_priv(ifcdevice, ADS23);
+    // adc3110_adc_init_priv(ifcdevice, ADS45);
+    // adc3110_adc_init_priv(ifcdevice, ADS67);
+
+    // // disable gain, set gain to 1 on all channels
+    // int i = 0;
+    // for (i = 0; i < 8; ++i) {
+    //     adc3110_set_gain(ifcdevice, i, 1);
+    // }
+
+    // // Issues with signed dataformat.
+    // adc3110_set_dataformat(ifcdevice, ifcdaqdrv_dataformat_unsigned);
 
 
     /* -------------------------------Checking if CLK is locked ----------------------------------- */
@@ -1229,15 +1335,14 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     const int timeout = 120; // 60ms
 
     int       timo    = 0;
-    int32_t   value;
 
     timo = 0;
     while (timo < timeout) {
         timo++;
 
-        ifc_fmc_tcsr_read(ifcdevice, 1, &value);
+        ifc_fmc_tcsr_read(ifcdevice, 1, &regvalue);
 
-        if (value & 0x00008000) {
+        if (regvalue & 0x00008000) {
             // MMCM is locked
             break;
         } else {
@@ -1248,7 +1353,7 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     }
 
     /* Check if MMC is locked */
-    if (value & 0x00008000) {
+    if (regvalue & 0x00008000) {
 
         char *p;
         p = ifcdevice->fru_id->product_name;
