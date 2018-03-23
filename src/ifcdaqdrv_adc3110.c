@@ -1203,11 +1203,11 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     usleep(1000);
 
     /* Generate ADC + ADCRX_PLL + ADCALL_PLL RESET */
-    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x100); // activate RESET
-    // usleep(100);
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x100); // activate RESET
+    usleep(100);
 
-    // ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x00000000); // deactivate RESET
-    // usleep(100);
+    ifc_fmc_tcsr_write(ifcdevice, 0x01, 0x00000000); // deactivate RESET
+    usleep(100);
 
     /*
     .
