@@ -335,69 +335,96 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.size       = size;
 
     dma_req.end_mode   = 0;
-    dma_req.start_mode = DMA_START_CHAN(0);
-    dma_req.intr_mode  = DMA_INTR_ENA;
-    dma_req.wait_mode  = 0;
+    dma_req.start_mode = (char) DMA_START_CHAN(0);
+    //dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
 
     status = tsc_dma_alloc(0);
     if (status) 
     {
       LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      tsc_dma_clear(0);
+      tsc_dma_free(0);
       return status;
     }
 
     status = tsc_dma_move(&dma_req);
-    if (status != 0) {
-        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        return status_read;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
-    
     if (status) 
     {
-      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
-    status = tsc_dma_wait(&dma_req);
-
-    if (status) {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
-    }
-    
-    // * 0x2 << 28 is the interrupt number.
-    // * The board can only read from the shared memory. If we are not reading
-    //   from shared memory the "WR0" will run because the DMA engine first has
-    //   to write the data into the shared memory.
-    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
-    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
-        valid_dma_status |= DMA_STATUS_RUN_WR0;
-    }
-
-    if (dma_req.dma_status != valid_dma_status) {
-        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        tsc_dma_clear(0);
         tsc_dma_free(0);
         return status_read;
     }
+
+    /* Check for errors */
+    if (dma_req.dma_status & DMA_STATUS_TMO)
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(0);
+        tsc_dma_free(0);
+        return status;
+    }
+    else if(dma_req.dma_status & DMA_STATUS_ERR)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(0);
+        tsc_dma_free(0);
+        return status;
+    }
+
+    // dma_sts.dma.chan = 0;
+    // status = tsc_dma_status(&dma_sts);
+    // if (status) 
+    // {
+    //   LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+    //   return status;
+    // }
+
+
+    // dma_sts.dma.chan = 0;
+    // status = tsc_dma_status(&dma_sts);
+    
+    // if (status) 
+    // {
+    //   LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+    //   return status;
+    // }
+
+    // dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
+    // status = tsc_dma_wait(&dma_req);
+
+    // if (status) {
+    //     LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
+    // }
+    
+    // // * 0x2 << 28 is the interrupt number.
+    // // * The board can only read from the shared memory. If we are not reading
+    // //   from shared memory the "WR0" will run because the DMA engine first has
+    // //   to write the data into the shared memory.
+    // valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
+    // if(!(dma_req.src_space & DMA_SPACE_SHM)) {
+    //     valid_dma_status |= DMA_STATUS_RUN_WR0;
+    // }
+
+    // if (dma_req.dma_status != valid_dma_status) {
+    //     LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+    //     tsc_dma_free(0);
+    //     return status_read;
+    // }
     
     /*free DMA channel 0 */
     status = tsc_dma_free(0);
     if (status) 
     {
       LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      tsc_dma_clear(0);
       return status_read;
     }
+
+    printf("Successful DMA !!!!! =) \n");
+    printf("Source address = 0x%08x \n", (int32_t) src_addr);
+
     return  status_success;
 }
 

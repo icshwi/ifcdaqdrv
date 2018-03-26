@@ -100,7 +100,8 @@
 #define IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT    4
 
 
-#define IFC_SCOPE_SRAM_SAMPLES_OFFSET        0x00100000
+//#define IFC_SCOPE_SRAM_SAMPLES_OFFSET        0x00100000
+#define IFC_SCOPE_SRAM_SAMPLES_OFFSET        0x01102000
 #define IFC_SCOPE_SMEM_FMC2_SAMPLES_OFFSET   0x10000000
 
 // The following option enables rearranging of pretrigger circular buffer.
