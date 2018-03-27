@@ -632,7 +632,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
             return status;
         }
 
-        ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
+        //ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
         origin   = ifcdevice->sram_dma_buf->u_base;
 
         npretrig = (nsamples * ptq) / 8;

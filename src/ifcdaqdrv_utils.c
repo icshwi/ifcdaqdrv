@@ -422,9 +422,6 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
       return status_read;
     }
 
-    printf("Successful DMA !!!!! =) \n");
-    printf("Source address = 0x%08x \n", (int32_t) src_addr);
-
     return  status_success;
 }
 
@@ -478,7 +475,7 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
 					 DMA_PCIE_RR2,
 					 dma_buf->b_base, 
-					 DMA_SPACE_PCIE, 
+					 DMA_SPACE_PCIE1, 
 					 DMA_PCIE_RR2,
 					 size | DMA_SIZE_PKT_1K);
 
@@ -567,7 +564,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
 					     dma_buf->b_base, 
-					     DMA_SPACE_PCIE | DMA_SPACE_WS, 
+					     DMA_SPACE_PCIE1 | DMA_SPACE_WS, 
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
 					     );
