@@ -60,6 +60,6 @@ void ifcfastintdrv_history_reset(struct ifcdaqdrv_dev *ifcdevice);
 
 void ifcfastint_print_status(int32_t reg);
 
-inline uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset);
+uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset);
 
 #endif /* _IFCFASTINT_UTILS_H_ */
