@@ -225,6 +225,11 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     buf_end = (i32_reg_val & 0xFFFF0000); // This points to first item *after* the buffer
     buf_size = buf_end - buf_start;
 
+    //****************************************************************************
+    buf_start = 0; // First history slot is special
+    buf_end = 0x80000;
+    buf_size = buf_end - buf_start;
+
     intptr_t content_start;
     intptr_t content_end;
 
@@ -239,7 +244,8 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
      */
-    content_end = i32_reg_val - 64;
+    //content_end = i32_reg_val - 64;
+    content_end = i32_reg_val;
     if(content_end < buf_start) {
             content_end += buf_size;
     }
@@ -251,7 +257,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
 
     /* No HISTORY BUFFER reading *************************************************************************/
     // forcing last frame to be 64*100 0x1900
-    content_start = 0x1900;
+    //content_start = 0x1900;
 
 #if 1    
     ifcfastintdrv_read_smem_historybuffer(
@@ -280,7 +286,6 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t i32_reg_val;
     size_t size;
-    LOG((LEVEL_TRACE, "%s\n", "Enter"));
 
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
@@ -293,13 +298,9 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 
     pthread_mutex_lock(&ifcdevice->lock);
 
-    if(DEBUG) {
-        status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_FSM_MAN_REG, &i32_reg_val);
-        if(ifcdaqdrvDebug >= LEVEL_DEBUG) {
-            ifcfastint_print_status(i32_reg_val);
-        }
-    }
 
+/* Use a fixed buffer size until DDR/SMEM access is not fixed  */
+#if 0
     // Get circular buffer size
     // Top 16 bits are buffer end pointer, lower 16 bits are buffer start pointer.
     size_t buf_size;
@@ -310,15 +311,22 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
-
-    //printf("-----------> Reg 0x68 = 0x%08x\n", i32_reg_val);
+    
 
     buf_start = ((i32_reg_val & 0xFFFF) << 16) + 64; // First history slot is special
     buf_end = (i32_reg_val & 0x1FFF0000); // This points to first item *after* the buffer
     buf_size = buf_end - buf_start;
-/**************************************************************************************/
-    buf_size = 0x20000;
-/*****************************************************************************************/
+#else 
+    size_t buf_size;
+    intptr_t buf_start;
+    intptr_t buf_end;
+
+
+    buf_start = 0;
+    buf_end = 0x80000;
+    buf_size = buf_end - buf_start;
+#endif
+
     intptr_t content_start;
     intptr_t content_end;
     // Store read pointer in `content_start`
@@ -339,14 +347,15 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
      */
-    content_end = i32_reg_val - 3*64;
+    //content_end = i32_reg_val - 3*64;
+    content_end = i32_reg_val - 1*64;
     if(content_end < buf_start) {
             content_end += buf_size;
     }
 
     /***************************************************************************************************************/
-    content_end = 0x20000;
-    content_start = 64 * 3;
+    //content_end = 0x20000;
+    //content_start = 64 * 3;
     /***************************************************************************************************************/
 
 
@@ -357,7 +366,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         return status_internal;
     }
 
-    LOG((LEVEL_DEBUG, "buffer start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR " content start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
+    //LOG((LEVEL_DEBUG, "buffer start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR " content start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
     //INFOLOG(("buffer start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR " content start: 0x%08" PRIxPTR " end: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
 
     if (!count && content_end > content_start) {
@@ -372,8 +381,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     *nelm = size/64;
 
     // New content_start. `content_start` might end up outside the buffer
-    //content_start = content_end - size;
-    /************************************************************************************************************/
+    content_start = content_end - size;
 
     // Bail early if 0 frames was found
     if(!size) {
@@ -384,7 +392,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 #if 1
     // Check if `content_start` is outside buffer
     if(content_start > buf_start) {
-        LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) in order\n", *nelm, size));
+        //LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) in order\n", *nelm, size));
         ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
@@ -393,9 +401,9 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
                 size
         );
     } else {
-        content_start += buf_size;
-        LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) out of order. CE %08" PRIxPTR ", BS %08" PRIxPTR "\n",
-                    *nelm, size, content_end - size, buf_start));
+        content_start += buf_size; // content_start is outside the buffer, adjust it to the current size
+        /*LOG((LEVEL_DEBUG, "reading out %zd (%zd bytes) out of order. CE %08" PRIxPTR ", BS %08" PRIxPTR "\n",
+                    *nelm, size, content_end - size, buf_start)); */
         ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
@@ -451,6 +459,24 @@ ifcdaqdrv_status ifcfastint_fsm_reset(struct ifcdaqdrv_usr *ifcuser) {
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }
+
+ifcdaqdrv_status ifcfastint_history_reset(struct ifcdaqdrv_usr *ifcuser) {
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    /* Clear and enable history */
+    ifcfastintdrv_history_reset(ifcdevice);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status_success;
+}
+
 
 ifcdaqdrv_status ifcfastint_get_fsm_state(struct ifcdaqdrv_usr *ifcuser,
                                           ifcfastint_fsm_state *state) {
@@ -1891,6 +1917,8 @@ ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser)
     if (!ifcdevice) {
         return status_no_device;
     }
+
+    pthread_mutex_lock(&ifcdevice->lock);
    
     /* Activate FMC Write 0x3118 in the signature register -> 0x03000050*/
     ifc_tcsr_write(ifcdevice, 0x1000, 0xC0, 0x31180000);
@@ -1899,7 +1927,86 @@ ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser)
     ifc_tcsr_write(ifcdevice, 0x1000, 0xC1, 0x03000050);
 
     /* output enables */
-    ifc_tcsr_write(ifcdevice, 0x1000, 0xC9, 0x001fffff);    
+    ifc_tcsr_write(ifcdevice, 0x1000, 0xC9, 0x001fffff);
+
+    pthread_mutex_unlock(&ifcdevice->lock); 
+
+    return status_success;
+}
+
+ifcdaqdrv_status ifcfastint_set_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t gain)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+    ifcfastintdrv_eeprom_write(ifcdevice, ifcfastint_aichannel_gain, channel, gain);
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    return status_success;
+}
+
+
+
+
+ifcdaqdrv_status ifcfastint_get_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *gain)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+    ifcfastintdrv_eeprom_read(ifcdevice, ifcfastint_aichannel_gain, channel, gain);
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    return status_success;
+}
+
+
+
+
+
+
+ifcdaqdrv_status ifcfastint_set_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t offset)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+    ifcfastintdrv_eeprom_write(ifcdevice, ifcfastint_aichannel_offset, channel, offset);
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    return status_success;
+}
+
+
+
+
+
+
+ifcdaqdrv_status ifcfastint_get_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *offset)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+    ifcfastintdrv_eeprom_read(ifcdevice, ifcfastint_aichannel_offset, channel, offset);
+    pthread_mutex_unlock(&ifcdevice->lock);
 
     return status_success;
 }

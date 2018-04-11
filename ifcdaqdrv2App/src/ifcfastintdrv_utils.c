@@ -850,3 +850,73 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
 
     return status_success;
 }
+
+ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, 
+                                           ifcfastint_aichannel_param param,
+                                           int channel,
+                                           uint32_t *value)
+{
+    uint32_t data = 0;
+    uint32_t addr = 0x2000;
+
+    *value = 0;
+
+    /**/
+    switch (param)
+    {
+        case ifcfastint_aichannel_gain:
+            addr = 0x2000 + (channel*4);
+            break;
+
+        case ifcfastint_aichannel_offset:
+            addr = 0x2002 + (channel*4);
+            break;
+
+        default:
+            break;
+    }
+
+    tsc_i2c_read(0x40010050, addr, &data);
+    usleep(5000);
+    *value = data;
+
+    tsc_i2c_read(0x40010050, addr+1, &data);
+    *value |= (data<<8);
+    usleep(2500);
+
+    return status_success;
+} 
+
+ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice, 
+                                           ifcfastint_aichannel_param param,
+                                           int channel,
+                                           uint32_t value)
+{
+    uint32_t data = 0;
+    uint32_t addr = 0x2000;
+
+    /**/
+    switch (param)
+    {
+        case ifcfastint_aichannel_gain:
+            addr = 0x2000 + (channel*4);
+            break;
+
+        case ifcfastint_aichannel_offset:
+            addr = 0x2002 + (channel*4);
+            break;
+
+        default:
+            break;
+    }
+
+    data = value & 0x000000ff;
+    tsc_i2c_write(0x40010050, addr, data);
+    usleep(5000);
+
+    data = (value>>8) & 0x000000ff;
+    tsc_i2c_write(0x40010050, addr+1, data);
+    usleep(5000);
+
+    return status_success;
+}
