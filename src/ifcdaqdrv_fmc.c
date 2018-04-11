@@ -35,46 +35,45 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_
 }
 
 ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t address, uint8_t *data){
-    int  status = 0;
-    uint device = 0x01010051;
-    uint reg_val;
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+        int  status = 0;
+        uint device = 0x01010051;
+        uint reg_val;
 
-    if (!data) {
-        return status_argument_invalid;
+        if (!data) {
+            return status_argument_invalid;
+        }
+
+        if (address > 0x7fff) {
+            return status_argument_range;
+        }
+
+        switch (ifcdevice->fmc) {
+        case 1:
+            device |= IFC_FMC1_I2C_BASE;
+            device += 1;     // Don't know why this is needed, found in  XprsMon/adc3110.c
+            break;
+        case 2:
+            device |= IFC_FMC2_I2C_BASE;
+            break;
+        }
+
+        /* TODO: this might be incompatible */
+        if ((device & 0x30000) == 0x10000) {
+            address = tsc_swap_16(address);
+        }
+
+        status = tsc_i2c_read(device, address, &reg_val);
+        if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
+            LOG((LEVEL_ERROR,"While calling tsc_i2c_read(), the device did not reply the ack\n"));
+            return status_i2c_nack;
+        }
+
+        *data = (uint8_t)reg_val;
     }
-
-    if (address > 0x7fff) {
-        return status_argument_range;
+    else {
+        *data = 0;
     }
-
-    switch (ifcdevice->fmc) {
-    case 1:
-        device |= IFC_FMC1_I2C_BASE;
-        device += 1;     // Don't know why this is needed, found in  XprsMon/adc3110.c
-        break;
-    case 2:
-        device |= IFC_FMC2_I2C_BASE;
-        break;
-    }
-
-#if I2C_SUPPORT_IS_WORKING
-
-    /* TODO: this might be incompatible */
-    if ((device & 0x30000) == 0x10000) {
-        address = tsc_swap_16(address);
-    }
-    
-    status = tsc_i2c_read(device, address, &reg_val);
-    if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
-        LOG((LEVEL_ERROR,"While calling tsc_i2c_read(), the device did not reply the ack\n"));
-        return status_i2c_nack;
-    }
-
-#else
-    reg_val = 0;
-#endif
-
-    *data = (uint8_t)reg_val;
     return status_success;
 }
 

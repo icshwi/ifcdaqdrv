@@ -25,9 +25,9 @@
 //typedef long dma_addr_t;
 
 ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
-#if I2C_SUPPORT_IS_WORKING
     char *p;
     p = ifcdevice->fru_id->product_name;
+
     if (p) {
         if (strcmp(p, "ACQ420FMC") == 0) {
             INFOLOG(("No support for ACQ420FMC yet!\n"));
@@ -55,11 +55,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         LOG((4, "Internal error, no product_name\n"));
         return status_internal;
     }
-#else
-    /* Legacy code from the development phase when I2C wasn't working */
-    LOG((5, "Identified (forced) ADC3110\n"));
-    adc3110_register(ifcdevice);
-#endif
 
     return status_success;
 }

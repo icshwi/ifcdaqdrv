@@ -600,7 +600,19 @@ long ifcdaqdrv_elapsedtime(void)
     return (temp.tv_nsec / 1000);
 }
 
+int ifcdaqdrv_is_byte_order_ppc(void)
+{
+    int test = 0;
+    char *byte = (char*)&test;
+    *byte = 1;
 
+    if (test){
+        return 0; // Little endian x86
+    }
+    else{
+        return 1; // Big endian ppc
+    }
+}
 
 // The following part is kept because we might implement interrupt handling with signals in the future...
 #if 0

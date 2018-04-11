@@ -527,18 +527,19 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
 
     /*TODO: check usage of i2c_read. Who is the first argument ? */
     
-#if I2C_SUPPORT_IS_WORKING
-    status  = tsc_i2c_read(device, reg, ui32_reg_val);
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+        status  = tsc_i2c_read(device, reg, ui32_reg_val);
 
-    /* TODO fix bit mask */
-    if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {
-        return status_i2c_nack;
+        /* TODO fix bit mask */
+        if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {
+            return status_i2c_nack;
+        }
     }
-#else
-    /* keep compatibility and remove warnings*/
-    status = 0;
-    *ui32_reg_val = (uint32_t) status;
-#endif
+    else { //x86_64
+        /* keep compatibility and remove warnings*/
+        status = 0;
+        *ui32_reg_val = (uint32_t) status;
+    }
     
     return status_success;
 }

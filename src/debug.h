@@ -42,10 +42,6 @@ static const char __attribute__((unused)) *level_str[] = {"", "", "", "E", "W", 
 #define DEBUG 1
 #endif /* NDEBUG */
 
-/* This macro exists to help the development of new modules when I2C may present failures
-   it will remain there until a production state is reached (i2c is fully supported) */
-#define I2C_SUPPORT_IS_WORKING 1
-
 #define I2C_CTL_EXEC_IDLE 0x00000000
 #define I2C_CTL_EXEC_RUN  0x00100000
 #define I2C_CTL_EXEC_DONE 0x00200000
