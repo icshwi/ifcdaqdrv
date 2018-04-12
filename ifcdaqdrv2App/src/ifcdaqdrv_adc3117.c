@@ -7,6 +7,9 @@
 #include <sys/ioctl.h>
 #include <pthread.h>
 
+#include "tscioctl.h"
+#include "tsculib.h"
+
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
@@ -47,10 +50,6 @@ static ifcdaqdrv_status adc3117_get_smem_nsamples_max(struct ifcdaqdrv_dev *ifcd
 ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdaqdrv_status status;
     uint32_t nsamples_max = 0;
-
-    status = adc3117_get_signature(ifcdevice, NULL, NULL, &ifcdevice->board_id);
-    if (status)
-        return status;
 
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
@@ -113,7 +112,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
     if (status) {
         return status;
     }
-    ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
+    ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size;
     ifcdevice->smem_size = 256 * 1024 * 1024;
 
     /* The subsystem lock is used to serialize access to the serial interface
@@ -125,6 +124,10 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
 
 ifcdaqdrv_status adc3117_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     ifcdaqdrv_status status;
+
+    status = adc3117_get_signature(ifcdevice, NULL, NULL, &ifcdevice->board_id);
+    if (status)
+        return status;
 
     if (ifcdevice->board_id != 0x3117) {
         printf("Error: %s: No ADC3117 installed on fmc%d [%04x]", __FUNCTION__, ifcdevice->fmc, ifcdevice->board_id);

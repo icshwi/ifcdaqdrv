@@ -6,16 +6,18 @@
 #include <string.h>
 #include <signal.h>
 #include <inttypes.h>
-#include <errno.h>
+typedef long dma_addr_t;
 
 #include <time.h>
 
-#include "toscaApi.h"
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
+// #include "ifcdaqdrv_acq420.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_scope.h"
 
@@ -24,58 +26,54 @@ struct timespec ts_start, ts_end;
 
 ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val)
 {
+    int ret;
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
+        // error message
         fprintf(stderr,"ERROR: ifc_tcsr_read(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
             offset, register_idx);
         return -1;
     }
 
-    *i32_reg_val = toscaCsrRead(TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    if (errno != 0) {
-        LOG((3, "toscaCsrRead() failed! with errno %d\n", errno));
-        return -1;
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
+    if (ret) {
+        fprintf(stderr,"ERROR: tsc_csr_read() tsc library returned %d\n", ret);
     }
-
-    return 0;
+    return ret;
 }
 
 ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value)
 {
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
+        // error message
         fprintf(stderr,"ERROR: ifc_tcsr_write(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
             offset, register_idx);
         return -1;
     }
 
-    toscaCsrWrite(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), value);
-    if (errno != 0) {
-        LOG((3, "toscaCsrWrite() failed! with errno %d\n", errno));
-        return -1;
-    }
+    int ret;
+    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
 
-    return 0;
+    if (ret) {
+        fprintf(stderr,"ERROR: tsc_csr_write() tsc library returned %d\n", ret);
+    }
+    return ret;
 }
 
 ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t clrmask)
 {
-    int32_t i32_reg_val = 0;
+    int32_t i32_reg_val;
+    int ret;
 
-    i32_reg_val = toscaCsrRead(TCSR_ACCESS_ADJUST + offset + (register_idx * 4));
-    if (errno != 0) {
-        LOG((3, "toscaCsrRead() failed! with errno %d\n", errno));
-        return -1;
+    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    if (ret) {
+        return ret;
     }
 
     i32_reg_val &= ~clrmask;
     i32_reg_val |= setmask;
 
-    toscaCsrWrite(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
-    if (errno != 0) {
-        LOG((3, "toscaCsrWrite() failed! with errno %d\n", errno));
-        return -1;
-    }
-
-    return 0;
+    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    return ret;
 }
 
 /* Functions for accessing any XUSER TCSR */
@@ -146,13 +144,17 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
     }
 
     if(ifcdevice->smem_dma_buf) {
-        free(ifcdevice->smem_dma_buf->u_base);
+        //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
+        tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
+        tsc_kbuf_free(ifcdevice->smem_dma_buf);
         free(ifcdevice->smem_dma_buf);
         ifcdevice->smem_dma_buf = NULL;
     }
 
     if(ifcdevice->sram_dma_buf){
-        free(ifcdevice->sram_dma_buf->u_base);
+        // pevx_buf_free(ifcdevice->card, ifcdevice->sram_dma_buf);
+        tsc_kbuf_munmap(ifcdevice->sram_dma_buf);
+        tsc_kbuf_free(ifcdevice->sram_dma_buf);
         free(ifcdevice->sram_dma_buf);
         ifcdevice->sram_dma_buf = NULL;
     }
@@ -170,24 +172,35 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 }
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
+    //void *p;
+    int ret;
 
-    ifcdevice->sram_dma_buf = calloc(1, sizeof(struct dma_buffer));
+    ifcdevice->sram_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->sram_dma_buf) {
         goto err_sram_ctl;
     }
 
     ifcdevice->sram_dma_buf->size = ifcdevice->sram_size;
 
-    LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition with valloc()\n", ifcdevice->sram_size / 1024));
-    ifcdevice->sram_dma_buf->u_base = valloc(ifcdevice->sram_size);
-    if (ifcdevice->sram_dma_buf->u_base == NULL)  {
-        fprintf(stderr, "ERROR: valloc() failed\n");
+    /* If the FMC is ADC3117 the DMA is not functional, then we need to use tsc_kbuf_alloc */
+    LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition with tsc_kbuf_alloc()\n", ifcdevice->sram_size / 1024));
+    if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
+        fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_sram_buf;
     }
 
-    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct dma_buffer));
+    /* If the FMC is ADC3110 / ADC3117 we need tsc_kbuf_mmap to use the DMA operations */
+    if (ifcdevice->board_id != 0x3117) {
+        LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
+        if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
+            //goto err_mmap_sram;
+            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
+        }
+    }
+
+    ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
     if (!ifcdevice->smem_dma_buf) {
-        fprintf(stderr, "ERROR: calloc(1, sizeof(struct dma_buffer)) failed\n");
+        fprintf(stderr, "ERROR: calloc(1, sizeof(struct tsc_ioctl_kbuf_req)) failed\n");
         goto err_smem_ctl;
     }
 
@@ -195,12 +208,21 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
         LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
-        ifcdevice->smem_dma_buf->u_base = valloc(ifcdevice->smem_dma_buf->size);
-    } while ((errno < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
+        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
+    } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
-    if(ifcdevice->smem_dma_buf->u_base == NULL) {
-        fprintf(stderr, "ERROR: valloc() failed\n");
+    if(ret) {
+        fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_smem_buf;
+    }
+
+    /* If the FMC is a ADC3110 / 3111 then DMA is functional, so it needs to run tsc_kbuf_mmap */
+    if (ifcdevice->board_id != 0x3117) {
+        LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+        if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
+            //goto err_mmap_smem;
+            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+        }
     }
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
@@ -210,22 +232,194 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_user_buf;
     }
 
+    LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
+    ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
+    if(!ifcdevice->sram_blk_buf){
+        fprintf(stderr, "calloc for the sram_blk_buf() failed\n");
+        goto err_mmap_sram;
+    }
+
+
+    /* This routine was used during development to check the memory allocation */
+
+#if 0
+//#ifdef DEBUG
+    uint64_t tp_sram;
+    uint64_t tp_smem;
+    tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
+    tp_smem = (uint64_t) ifcdevice->smem_dma_buf->u_base;     
+
+    /* PRIx64 macro is from inttypes.h */
+    printf("tsc_kbuf_alloc() was successful, buffers were filled with:\n");
+    printf("########################################################################\n");
+    printf("sram_dma_buf->size = %d\n", ifcdevice->sram_dma_buf->size);
+    printf("sram_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->sram_dma_buf->b_base);
+    printf("sram_dma_buf->u_base = 0x%" PRIXPTR "\n", (uintptr_t)ifcdevice->sram_dma_buf->u_base);
+    printf("########################################################################\n");
+    printf("smem_dma_buf->size = %d\n", ifcdevice->smem_dma_buf->size);
+    printf("smem_dma_buf->b_base = 0x%" PRIx64"\n", ifcdevice->smem_dma_buf->b_base);
+    printf("smem_dma_buf->u_base = 0x%" PRIXPTR"\n", (uintptr_t) ifcdevice->smem_dma_buf->u_base);
+    printf("########################################################################\n");
+#endif
+
     return status_success;
 
+ err_mmap_sram:
+    free(ifcdevice->all_ch_buf);
+
 err_smem_user_buf:
-    free(ifcdevice->smem_dma_buf->u_base);
+    tsc_kbuf_free(ifcdevice->smem_dma_buf);
  
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
-    free(ifcdevice->sram_dma_buf->u_base);
+    tsc_kbuf_free(ifcdevice->sram_dma_buf);
+
+// err_mmap_sram:
+//     tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
 
 err_sram_buf:
     free(ifcdevice->sram_dma_buf);
 
 err_sram_ctl:
     return status_internal;
+
+}
+
+/**
+ * This is a helper function that reads from FPGA Block RAM named USR1 for FMC1 or USR2 for FMC2.
+ * b_addr (bus address) should be a pev_ioctl_dma_req compatible des_addr pointer.
+ *
+ * @param ifdevice
+ * @param offset Byte addressed offset
+ * @param size Size in bytes
+ */
+ifcdaqdrv_status 
+ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
+			    , dma_addr_t src_addr
+			    , uint8_t src_space
+			    , uint8_t src_mode
+			    , dma_addr_t des_addr
+			    , uint8_t des_space
+			    , uint8_t des_mode
+			    , uint32_t size) 
+{
+    struct tsc_ioctl_dma_req dma_req = {0};
+
+    int status;
+    uint32_t valid_dma_status;
+    struct tsc_ioctl_dma_sts dma_sts;
+
+    /* Assuming that we are using channel ZERO */
+    
+#if 0 //#ifdef PEV_MOV_MODE 
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = src_mode;
+
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space;
+    dma_req.des_mode  = des_mode;
+
+    dma_req.size       = size;
+
+    dma_req.start_mode = DMA_START_PIPE;
+    dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
+#endif
+
+    /* Based on TscMon source code */
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = 0;
+
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space;
+    dma_req.des_mode  = 0;
+
+    dma_req.size       = size;
+
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = DMA_START_CHAN(0);
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = 0;
+
+    status = tsc_dma_alloc(0);
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    status = tsc_dma_move(&dma_req);
+    if (status != 0) {
+        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        return status_read;
+    }
+
+    dma_sts.dma.chan = 0;
+    status = tsc_dma_status(&dma_sts);
+    
+    if (status) 
+    {
+      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
+      return status;
+    }
+
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
+    status = tsc_dma_wait(&dma_req);
+
+    if (status) {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
+    }
+    
+    // * 0x2 << 28 is the interrupt number.
+    // * The board can only read from the shared memory. If we are not reading
+    //   from shared memory the "WR0" will run because the DMA engine first has
+    //   to write the data into the shared memory.
+    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
+    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
+        valid_dma_status |= DMA_STATUS_RUN_WR0;
+    }
+
+    if (dma_req.dma_status != valid_dma_status) {
+        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
+        tsc_dma_clear(0);
+        usleep(1000);
+        tsc_dma_free(0);
+        usleep(1000);
+        return status_read;
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(0);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      return status_read;
+    }
+    return  status_success;
+}
+
+static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
+    switch (ifcdevice->sample_size) {
+    case 2:
+        return DMA_SPACE_WS;
+    case 4:
+        return DMA_SPACE_DS;
+    case 8:
+        return DMA_SPACE_QS;
+    }
+    return 0;
 }
 
 /*
@@ -237,20 +431,66 @@ err_sram_ctl:
  * @param size Size in bytes to read.
  */
 
-ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size) {
-    int status = 0;
+ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
+    int status;
 
-    if (!dma_buf || !dma_buf->u_base) {
+    /* TODO: check usage of base address of the buffer. Tosca doesn't use pointer */
+    //if (!dma_buf || !dma_buf->b_addr) {
+    if (!dma_buf || !dma_buf->b_base) {
         return status_internal;
     }
 
-    status = toscaDmaRead(TOSCA_USER1, offset, dma_buf->u_base, size, 4, 0, NULL, NULL);
+    /* workaround */
+#ifndef DMA_SPACE_USR1
+    #define DMA_SPACE_USR1 0x04
+#endif
+
+#ifndef DMA_SPACE_USR2
+    #define DMA_SPACE_USR2 0x05
+#endif
+
+
+    // dma_buf->u_base is already dma_addr_t, no need to cast to ulong
+    // "offset" will be casted 
+
+    /*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
+    status = ifcdaqdrv_dma_read_unlocked(
+					 ifcdevice,
+					 (dma_addr_t) offset, 
+					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
+					 DMA_PCIE_RR2,
+					 dma_buf->b_base, 
+					 DMA_SPACE_PCIE, 
+					 DMA_PCIE_RR2,
+					 size | DMA_SIZE_PKT_1K);
+
     return status;
 }
 
 // This is a fixed offset for FMC2 since SCOPE2 stores samples at this offset (256 MiB).
 static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
     return ifcdevice->fmc == 1 ? 0 : IFC_SCOPE_SMEM_FMC2_SAMPLES_OFFSET;
+}
+
+void ifc_stop_timer(struct ifcdaqdrv_dev *ifcdevice) {
+    //pevx_timer_stop(ifcdevice->card);
+    tsc_timer_stop();
+}
+
+void ifc_init_timer(struct ifcdaqdrv_dev *ifcdevice){
+    // pevx_timer_start(ifcdevice->card, TIMER_1MHZ ,0);
+    tsc_timer_start(TIMER_1MHZ, 0);
+}
+
+uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
+
+    // struct pevx_time tim;  
+    // pevx_timer_read(ifcdevice->card, &tim);
+    struct tsc_time tim;
+    tsc_timer_read(&tim);
+
+    return ((uint64_t)tim.msec * 1000) + (uint64_t)(tim.usec & 0x1ffff) / 100;
+    
 }
 
 /*
@@ -264,28 +504,55 @@ static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
  * @param size Size in bytes to read.
  */
 
-ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct dma_buffer *dma_buf, uint32_t offset, uint32_t size) {
-    int status = 0;
+ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
+    int status;
     intptr_t src_addr;
     uint32_t current_size;
     uint32_t total_size; /* Debug variable */
+    uint64_t __attribute__((unused)) total_time; /* Debug variable */
+
+    //long meastime = 0;
 
     if(DEBUG) total_size = size;
     LOG((LEVEL_DEBUG, "Copying from: 0x%08x, amount: %u\n", offset, size));
 
-    if (!dma_buf || !dma_buf->u_base) {
+    /* TODO: check usage of base address of the buffer. Tosca doesn't use pointer */
+    //if (!dma_buf || !dma_buf->b_addr) {
+    if (!dma_buf || !dma_buf->b_base) {
         return status_internal;
     }
 
     src_addr = smem_fmc_offset(ifcdevice) + offset;
     current_size = dma_buf->size;
-
+    //if(DEBUG) ifc_init_timer(ifcdevice);
     while(size != 0) {
         if(size < dma_buf->size) {
             current_size = size;
         }
 
-        status = toscaDmaRead(TOSCA_SMEM1, offset, dma_buf->u_base, current_size, 4, 0, NULL, NULL);
+        // dma_buf is already dma_addr_t
+        // src_addr sholud be casted
+
+#if 0
+	printf(" [smem_read] dma_buf->size = %"PRIu32" \n", dma_buf->size);
+	printf(" [smem_read] dma_buf->size = 0x%08x \n", dma_buf->size);
+	printf(" [smem_read] curr_size = %"PRIu32" \n", current_size);
+	printf(" [smem_read] curr_size = 0x%08x \n", current_size);
+	printf(" [smem_read] size = %"PRIu32" \n", size);
+	printf(" [smem_read] size = 0x%08x \n", size);
+#endif
+
+	/*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
+        status = ifcdaqdrv_dma_read_unlocked(
+					     ifcdevice,
+					     (dma_addr_t) src_addr, 
+					     DMA_SPACE_SHM, 
+					     DMA_PCIE_RR2,
+					     dma_buf->b_base, 
+					     DMA_SPACE_PCIE, 
+					     DMA_PCIE_RR2,
+					     current_size | DMA_SIZE_PKT_1K
+					     );
 
         if (status != 0) {
             return status;
@@ -297,6 +564,9 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
         size     -= current_size;
     }
 
+    //if(DEBUG) total_time = ifc_get_timer(ifcdevice);
+    //if(DEBUG) ifc_stop_timer(ifcdevice);
+    // LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB took %llu ms\n", (total_size)/1024.0/1024.0, total_time));
     LOG((LEVEL_DEBUG, "read_smem_unlocked %.2f MB  - SUCCESS\n", (total_size)/1024.0/1024.0));
 
     return status_success;
