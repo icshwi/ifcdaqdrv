@@ -6,6 +6,9 @@
 #include <assert.h>
 #include <string.h>
 
+#include "tscioctl.h"
+#include "tsculib.h"
+
 #include "debug.h"
 #include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"

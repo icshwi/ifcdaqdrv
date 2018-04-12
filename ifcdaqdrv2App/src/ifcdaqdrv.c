@@ -8,7 +8,8 @@
 #include <pthread.h>
 
 /* TOSCA API */
-#include "toscaApi.h"
+#include "tscioctl.h"
+#include "tsculib.h"
 
 #include "debug.h"
 #include "ifcdaqdrv2.h"
@@ -32,6 +33,8 @@ pthread_mutex_t ifcdaqdrv_devlist_lock = PTHREAD_MUTEX_INITIALIZER;
 
 ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     ifcdaqdrv_status      status;
+    
+    int                   node; /* TOSCA file descriptor */
     int32_t               i32_reg_val;
     struct ifcdaqdrv_dev *ifcdevice;
     int                   data = IFC1410_FMC_EN_DATA;
@@ -62,6 +65,14 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         }
     }
 
+    /* Initialize tsc library */
+
+    node = tsc_init();
+    if (node < 0) {
+        status = status_no_device;
+        goto err_pevx_init;
+    }
+
     /* Allocate private structure */
     ifcdevice = calloc(1, sizeof(struct ifcdaqdrv_dev));
     if (!ifcdevice) {
@@ -71,6 +82,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
 
     ifcdevice->card  = ifcuser->card;
     ifcdevice->fmc   = ifcuser->fmc;
+    ifcdevice->node  = node;
     ifcdevice->count = 1;
 
     pthread_mutex_init(&ifcdevice->lock, NULL);
@@ -185,9 +197,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* Enable the CENTRAL FPGA using the PON FPGA (pi c c0000000)*/
-    toscaPonWrite(IFC1410_FMC_EN_OFFSET, data);
-    i32_reg_val = toscaPonRead(IFC1410_FMC_EN_OFFSET);
-    LOG((LEVEL_DEBUG, "TOSCA PON FMC EN: %08x\n", i32_reg_val));
+    tsc_pon_write(IFC1410_FMC_EN_OFFSET, &data);
 
     /* Add device to the list of opened devices */
     list_add_tail(&ifcdevice->list, &ifcdaqdrv_devlist);
@@ -200,6 +210,10 @@ err_read:
     ifcdaqdrv_free(ifcdevice);
 
 err_dev_alloc:
+    /* Close pevx library */
+    tsc_exit();
+
+err_pevx_init:
     /* Unlock device list */
     pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);
     return status;
@@ -223,6 +237,7 @@ ifcdaqdrv_status ifcdaqdrv_close_device(struct ifcdaqdrv_usr *ifcuser) {
     if (--ifcdevice->count == 0) {
         list_del(&ifcdevice->list);
         ifcdaqdrv_free(ifcdevice);
+        tsc_exit();
         free(ifcdevice);
     }
     pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);
