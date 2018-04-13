@@ -23,7 +23,7 @@ CROSS_COMPILER_TARGET_ARCHS = linux-ppc64e6500
 
 # To install files into a location other than $(TOP) define
 #   INSTALL_LOCATION here.
-INSTALL_LOCATION=/opt/vsee/rflps-env/modules/ifcdaqdrv2-dev
+INSTALL_LOCATION=/opt/vsee/rflps-env/modules/ifcdaqdrv2
 
 # Set this when the IOC and build host use different paths
 #   to the install location. This may be needed to boot from

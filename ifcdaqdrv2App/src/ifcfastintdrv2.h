@@ -65,6 +65,13 @@ typedef enum {
  * @brief FSM states
  */
 
+  /*
+  * IDLE and ABO are states that corresponds to STDBY state on the SIM 
+  * PRE corresponds to HV ON
+  * RUN corresponds to RF ON
+  *
+  */
+
 typedef enum {
     ifcfastint_fsm_state_idle,
     ifcfastint_fsm_state_arm,
@@ -105,8 +112,6 @@ typedef enum {
 	ifcfastint_history_postmortem,
 	ifcfastint_history_ended
 } ifcfastint_hist_state;
-
-
 
 /* Masks used on history mode configuration to identify which options will write */
 #define IFCFASTINT_HISTORY_ENABLE_W	(1<<0)
