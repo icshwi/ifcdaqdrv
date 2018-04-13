@@ -119,10 +119,14 @@ ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
     ifc_xuser_tcsr_write(ifcdevice, 0x24, 3);
     usleep(10*1000);
 
+#if 0 // ONLY VALID FOR VME VERSION
     /* Check if V6-S6 is operating OK */
     ifc_xuser_tcsr_read(ifcdevice, 0x24, &i32regval);
     if ((i32regval & 0xF000C00F) != (0xC0008003))
-    	LOG((LEVEL_ERROR, "Register 0x24 = 0x%8x", i32regval));
+    {    
+        LOG((LEVEL_ERROR, "Register 0x24 = 0x%08x\n", i32regval));
+    }
+#endif
 
     /* Reset and set DIRECT mode of FMC support module */
     ifc_xuser_tcsr_write(ifcdevice, 0x61, 0x05010101);
@@ -317,7 +321,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     
     ifcdaqdrv_status status;
 
-/********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
+/********************* Read TMEM using DMA engine - TO BE TESTED  ********************************/
 #if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req *dma_buf;
@@ -427,7 +431,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status;
 
-/********************* Read TMEM using DMA engine - ccurrently not working  ********************************/
+/********************* Read TMEM using DMA engine - TO BE TESTED  ********************************/
 #if 0
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req *dma_buf;
@@ -538,9 +542,6 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
         return status_internal;
     }
 
-    /* Default allocation size as 16 kb */
-    //kbuf_req->size = 16*1024;
-
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", kbuf_req->size));
         ret = tsc_kbuf_alloc(kbuf_req);
@@ -648,7 +649,6 @@ ifcdaqdrv_status ifcfastintdrv_printregister(uint64_t *pp_register) {
     return status_success;
 }
 
-
 #define TSCDMA_PKT_SIZE 0x400 // 
 #define CURR_DMA_CHAN DMA_CHAN_2
 
@@ -727,102 +727,6 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
      */       
     memcpy(dest_buffer, dma_buf->u_base, (size_t) size);
     return 0;
-
-#if 0
-    //pointer to hold the next address to be written
-    uint8_t *dest_buffer_p = (uint8_t*) dest_buffer;
-    uint32_t bytes_received  = 0;
-    volatile int i = 0;
-
-
-    while (bytes_received < size)
-    {
-
-        dma_req.src_addr = (dma_addr_t) smem_addr;
-        dma_req.src_space = 2; //DMA_SPACE_SMEM
-        dma_req.src_mode = 0; //DMA_PCIE_RR2;
-
-        dma_req.des_addr = dma_buf->b_base;
-        dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
-        dma_req.des_mode = 0; //DMA_PCIE_RR2;
-
-        dma_req.end_mode   = 0;
-        dma_req.start_mode = (char) DMA_START_CHAN(CURR_DMA_CHAN);
-        //dma_req.intr_mode  = DMA_INTR_ENA;
-        dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
-
-        //dma_req.size = size; //dma_buf->size | DMA_SIZE_PKT_128;
-        dma_req.size = TSCDMA_PKT_SIZE;
-
-        status = tsc_dma_alloc(CURR_DMA_CHAN);
-        if (status) 
-        {
-            LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(CURR_DMA_CHAN) == %d \n", __FUNCTION__, status));
-            tsc_dma_clear(CURR_DMA_CHAN);
-            tsc_dma_free(CURR_DMA_CHAN);
-            break;
-        }
-
-        status = tsc_dma_move(&dma_req);
-        if (status) 
-        {
-            LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-            tsc_dma_clear(CURR_DMA_CHAN);
-            tsc_dma_free(CURR_DMA_CHAN);
-            break;
-        }
-
-        /* Check for errors */
-        if (dma_req.dma_status & DMA_STATUS_TMO)
-        {
-            LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
-            tsc_dma_clear(CURR_DMA_CHAN);
-            tsc_dma_free(CURR_DMA_CHAN);
-            break;
-        }
-        else if(dma_req.dma_status & DMA_STATUS_ERR)
-        {
-            LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
-            tsc_dma_clear(CURR_DMA_CHAN);
-            tsc_dma_free(CURR_DMA_CHAN);
-            break;
-        }
-        
-        /*free DMA channel 0 */
-        status = tsc_dma_free(CURR_DMA_CHAN);
-        if (status) 
-        {
-          LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-          tsc_dma_clear(CURR_DMA_CHAN);
-          break;
-        }
-
-        /* Copy from kernel space (dma_buf) to userspace (pp_options)
-         * TODO: check for errors and fill buffer with zeros??
-         */       
-        if ((size - bytes_received) <  TSCDMA_PKT_SIZE) {
-            memcpy((void*)dest_buffer_p, dma_buf->u_base, (size_t) (size - bytes_received));
-        } else {
-            memcpy((void*)dest_buffer_p, dma_buf->u_base, (size_t) TSCDMA_PKT_SIZE);
-            dest_buffer_p += TSCDMA_PKT_SIZE;
-            smem_addr += TSCDMA_PKT_SIZE;
-        }
-        bytes_received += TSCDMA_PKT_SIZE;
-
-
-        status = status_success;
-        i++;
-        usleep(1000);
-    }
-
-    if (status) {
-        //INFOLOG(("Successful DMA transaction after %d iterations", i));
-        INFOLOG(("DMA ERROR HAPPENED"));
-    }
-    
-    return status;
-
-#endif
 }
 
 #define RT_OFFSET 0x300000
