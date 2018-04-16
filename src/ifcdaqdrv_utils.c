@@ -602,15 +602,11 @@ long ifcdaqdrv_elapsedtime(void)
 
 int ifcdaqdrv_is_byte_order_ppc(void)
 {
-    int test = 0;
-    char *byte = (char*)&test;
-    *byte = 1;
-
-    if (test){
-        return 0; // Little endian x86
+    if (CheckByteOrder()){
+        return 1; // Big endian ppc
     }
     else{
-        return 1; // Big endian ppc
+        return 0; // Little endian x86_64
     }
 }
 
