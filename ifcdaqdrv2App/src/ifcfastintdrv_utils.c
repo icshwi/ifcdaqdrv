@@ -97,7 +97,6 @@ ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
         return status;
 
     /* Legacy code from VME version */
-    int32_t i32regval;
 
     /* Set correct pins on P2 to IN */
     //ifc_xuser_tcsr_write(ifcdevice, 0x0f, 0);
@@ -338,7 +337,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
         return status_internal;
     }
 
-    dma_req.src_addr = (dma_addr_t) PP_OFFSET + addr;
+    dma_req.src_addr = (uint64_t) PP_OFFSET + addr;
     dma_req.src_space = 4; //DMA_SPACE_USR1
     dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
@@ -451,7 +450,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     /* Copy from userspace to kernel space (dma_buf) */
     memcpy(dma_buf->u_base, (void *)&pp_options, sizeof(pp_options));
 
-    dma_req.des_addr = (dma_addr_t) PP_OFFSET + addr;
+    dma_req.des_addr = (uint64_t) PP_OFFSET + addr;
     dma_req.des_space = 4; //DMA_SPACE_USR1
     dma_req.des_mode = 0; //DMA_PCIE_RR2;
 
@@ -663,7 +662,7 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
     ifcdaqdrv_status status;
     struct tsc_ioctl_dma_req dma_req = {0};
 
-    dma_req.src_addr = (dma_addr_t) smem_addr;
+    dma_req.src_addr = (uint64_t) smem_addr;
     dma_req.src_space = 2; //DMA_SPACE_SMEM
     dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
