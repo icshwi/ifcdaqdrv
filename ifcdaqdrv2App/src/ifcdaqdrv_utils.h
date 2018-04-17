@@ -249,7 +249,7 @@ void ifcdaqdrv_manualswap(uint16_t *buffer, int nsamples);
 void ifcdaqdrv_start_tmeas(void);
 void ifcdaqdrv_end_tmeas(void);
 long ifcdaqdrv_elapsedtime(void);
-
+int ifcdaqdrv_is_byte_order_ppc(void);
 
 
 #endif // _IFC1210SCOPEDRV_UTILS_H_

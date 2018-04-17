@@ -156,10 +156,25 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         goto err_read;
     }
 
-#if I2C_SUPPORT_IS_WORKING
-    LOG((LEVEL_NOTICE, "Trying to read EEPROM\n"));
-    ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
-#endif
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+        LOG((LEVEL_NOTICE, "Trying to read EEPROM\n"));
+        ifc_fmc_eeprom_read_sig(ifcdevice, (uint8_t *)ifcdevice->fru_id->product_name);
+    } else {
+        switch (i32_reg_val >> 16) {
+        case 0x3110:
+            strcpy(ifcdevice->fru_id->product_name, "ADC3110");
+            break;
+        case 0x3111:
+            strcpy(ifcdevice->fru_id->product_name, "ADC3111");
+            break;
+        case 0x3117:
+            strcpy(ifcdevice->fru_id->product_name, "ADC3117");
+            break;
+        case 0x3118:
+            strcpy(ifcdevice->fru_id->product_name, "DIO3118");
+            break;
+        }
+    }
     
     /*
      * Register the correct functions with the ifcdevice and

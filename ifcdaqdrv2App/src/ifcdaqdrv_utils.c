@@ -462,7 +462,7 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
 					 DMA_PCIE_RR2,
 					 dma_buf->b_base, 
-					 DMA_SPACE_PCIE, 
+					 ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
 					 DMA_PCIE_RR2,
 					 size | DMA_SIZE_PKT_1K);
 
@@ -551,7 +551,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
 					     dma_buf->b_base, 
-					     DMA_SPACE_PCIE, 
+					     ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE | DMA_SPACE_WS : DMA_SPACE_PCIE1 | DMA_SPACE_WS,
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
 					     );
@@ -611,7 +611,15 @@ long ifcdaqdrv_elapsedtime(void)
     return (temp.tv_nsec / 1000);
 }
 
-
+int ifcdaqdrv_is_byte_order_ppc(void)
+{
+    if (CheckByteOrder()){
+        return 1; // Big endian ppc
+    }
+    else{
+        return 0; // Little endian x86_64
+    }
+}
 
 // The following part is kept because we might implement interrupt handling with signals in the future...
 #if 0

@@ -667,7 +667,7 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
     dma_req.src_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.des_addr = dma_buf->b_base;
-    dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
+    dma_req.des_space = ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
     dma_req.des_mode = 0; //DMA_PCIE_RR2;
 
     dma_req.end_mode   = 0;
