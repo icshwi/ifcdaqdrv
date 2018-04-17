@@ -23,10 +23,15 @@
 # the CONFIG_SITE file.
 
 # Variables and paths to dependent modules:
-TSCLIB = /opt/vsee/rflps-env/modules/tsclib/1.4.2
+
+#
+# TSCLIB is a support library provided by IOxOS
+# - in this particular case it is build as an EPICS support module
+#
+TSCLIB = /path/to/tsclib
 
 # EPICS_BASE should appear last so earlier modules can override stuff:
-EPICS_BASE=/opt/vsee/rflps-env
+EPICS_BASE=/path/to/epics/base
 
 # Set RULES here if you want to use build rules from somewhere
 # other than EPICS_BASE:
