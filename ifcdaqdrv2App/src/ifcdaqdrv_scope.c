@@ -38,6 +38,9 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         } else if (strcmp(p, "ADC3111") == 0) {
             INFOLOG(("Identified ADC3111 on FMC %d\n", ifcdevice->fmc));
             adc3111_register(ifcdevice);
+        } else if (strcmp(p, "ADC_3111") == 0) {
+            INFOLOG(("Identified %s on FMC %d\n", p, ifcdevice->fmc));
+            adc3111_register(ifcdevice);
         } else if (strcmp(p, "ADC3112") == 0) {
             INFOLOG(("No support for ADC3112 yet\n"));
             return status_incompatible;
