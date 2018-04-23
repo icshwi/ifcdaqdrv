@@ -610,34 +610,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
         if (ifcdevice->board_id == 0x3117) {
-            offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 12);
+            offset = IFC_SCOPE_LITE_SRAM_SAMPLES_OFFSET + (channel << 12);
         } else {
             offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
         }
 
-        /* If the FMC is ADC3110/3111 we can use the DMA */
-        if (ifcdevice->board_id != 0x3117) {
-            status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
-            if (status) {
-                return status;
-            }
-        } else {
-            
-            /* DMA is not validated for ADC3117 - using block read for now */
-
-            /* Transfer data to sram_blk_buf */
-            struct tsc_ioctl_rdwr tsc_read_s;
-
-            tsc_read_s.m.ads = (char) RDWR_MODE_SET_DS(0x44, RDWR_SIZE_SHORT);
-            tsc_read_s.m.space = RDWR_SPACE_USR1;
-            tsc_read_s.m.swap = RDWR_SWAP_QS;
-            tsc_read_s.m.am = 0x0;
-       
-            status = tsc_read_blk((ulong)offset, (char*) ifcdevice->sram_blk_buf, nsamples * ifcdevice->sample_size, tsc_read_s.mode);
-            if (status) {
-                LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
-                return status;
-            }
+        status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+        if (status) {
+            return status;
         }
         
         status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);

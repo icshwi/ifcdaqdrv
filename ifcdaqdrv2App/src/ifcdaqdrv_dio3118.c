@@ -80,13 +80,13 @@ static ifcdaqdrv_status __attribute__((unused)) dio3118_get_temperature(struct i
         device |= 0xa0000000;
     }
 
-    status = tsc_i2c_read(device, 0, &reg_val);
+    status = tsc_i2c_read(ifcdevice->node, device, 0, &reg_val);
     data[0] = reg_val;
-    status = tsc_i2c_read(device, 1, &reg_val);
+    status = tsc_i2c_read(ifcdevice->node, device, 1, &reg_val);
     data[1] = reg_val;
-    status = tsc_i2c_read(device, 2, &reg_val);
+    status = tsc_i2c_read(ifcdevice->node, device, 2, &reg_val);
     data[2] = reg_val;
-    status = tsc_i2c_read(device, 3, &reg_val);
+    status = tsc_i2c_read(ifcdevice->node, device, 3, &reg_val);
     data[3] = reg_val;
 
     return status;

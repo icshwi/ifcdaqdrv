@@ -34,7 +34,7 @@ ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int 
         return -1;
     }
 
-    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
+    ret = tsc_csr_read(ifcdevice->node, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), i32_reg_val);
     if (ret) {
         fprintf(stderr,"ERROR: tsc_csr_read() tsc library returned %d\n", ret);
     }
@@ -51,7 +51,7 @@ ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int
     }
 
     int ret;
-    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
+    ret = tsc_csr_write(ifcdevice->node, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &value);
 
     if (ret) {
         fprintf(stderr,"ERROR: tsc_csr_write() tsc library returned %d\n", ret);
@@ -64,7 +64,7 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     int32_t i32_reg_val;
     int ret;
 
-    ret = tsc_csr_read(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    ret = tsc_csr_read(ifcdevice->node, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
     if (ret) {
         return ret;
     }
@@ -72,7 +72,7 @@ ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, in
     i32_reg_val &= ~clrmask;
     i32_reg_val |= setmask;
 
-    ret = tsc_csr_write(TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
+    ret = tsc_csr_write(ifcdevice->node, TCSR_ACCESS_ADJUST + offset + (register_idx * 4), &i32_reg_val);
     return ret;
 }
 
@@ -146,7 +146,7 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
     if(ifcdevice->smem_dma_buf) {
         //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
         tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
-        tsc_kbuf_free(ifcdevice->smem_dma_buf);
+        tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
         free(ifcdevice->smem_dma_buf);
         ifcdevice->smem_dma_buf = NULL;
     }
@@ -154,7 +154,7 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
     if(ifcdevice->sram_dma_buf){
         // pevx_buf_free(ifcdevice->card, ifcdevice->sram_dma_buf);
         tsc_kbuf_munmap(ifcdevice->sram_dma_buf);
-        tsc_kbuf_free(ifcdevice->sram_dma_buf);
+        tsc_kbuf_free(ifcdevice->node, ifcdevice->sram_dma_buf);
         free(ifcdevice->sram_dma_buf);
         ifcdevice->sram_dma_buf = NULL;
     }
@@ -182,20 +182,16 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->sram_dma_buf->size = ifcdevice->sram_size;
 
-    /* If the FMC is ADC3117 the DMA is not functional, then we need to use tsc_kbuf_alloc */
     LOG((5, "Trying to allocate %dkiB in kernel for SRAM acquisition with tsc_kbuf_alloc()\n", ifcdevice->sram_size / 1024));
-    if (tsc_kbuf_alloc(ifcdevice->sram_dma_buf) < 0)  {
+    if (tsc_kbuf_alloc(ifcdevice->node, ifcdevice->sram_dma_buf) < 0)  {
         fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
         goto err_sram_buf;
     }
 
-    /* If the FMC is ADC3110 / ADC3117 we need tsc_kbuf_mmap to use the DMA operations */
-    if (ifcdevice->board_id != 0x3117) {
-        LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
-        if (tsc_kbuf_mmap(ifcdevice->sram_dma_buf) < 0)  {
-            //goto err_mmap_sram;
-            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
-        }
+    LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->sram_dma_buf) < 0)  {
+        //goto err_mmap_sram;
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
     }
 
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -208,7 +204,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
         LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
-        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
+        ret = tsc_kbuf_alloc(ifcdevice->node, ifcdevice->smem_dma_buf);
     } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
     if(ret) {
@@ -216,13 +212,10 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_buf;
     }
 
-    /* If the FMC is a ADC3110 / 3111 then DMA is functional, so it needs to run tsc_kbuf_mmap */
-    if (ifcdevice->board_id != 0x3117) {
-        LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-        if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  {
-            //goto err_mmap_smem;
-            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
-        }
+    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+    if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->smem_dma_buf) < 0)  {
+        //goto err_mmap_smem;
+        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
     }
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
@@ -268,13 +261,13 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     free(ifcdevice->all_ch_buf);
 
 err_smem_user_buf:
-    tsc_kbuf_free(ifcdevice->smem_dma_buf);
+    tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
  
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
-    tsc_kbuf_free(ifcdevice->sram_dma_buf);
+    tsc_kbuf_free(ifcdevice->node, ifcdevice->sram_dma_buf);
 
 // err_mmap_sram:
 //     tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
@@ -347,7 +340,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = 0;
 
-    status = tsc_dma_alloc(0);
+    status = tsc_dma_alloc(ifcdevice->node, 0);
     if (status) 
     {
       LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
@@ -355,21 +348,21 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     }
 
     dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
+    status = tsc_dma_status(ifcdevice->node, &dma_sts);
     if (status) 
     {
       LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
       return status;
     }
 
-    status = tsc_dma_move(&dma_req);
+    status = tsc_dma_move(ifcdevice->node, &dma_req);
     if (status != 0) {
         LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
         return status_read;
     }
 
     dma_sts.dma.chan = 0;
-    status = tsc_dma_status(&dma_sts);
+    status = tsc_dma_status(ifcdevice->node, &dma_sts);
     
     if (status) 
     {
@@ -378,7 +371,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     }
 
     dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
-    status = tsc_dma_wait(&dma_req);
+    status = tsc_dma_wait(ifcdevice->node, &dma_req);
 
     if (status) {
         LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
@@ -395,15 +388,15 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 
     if (dma_req.dma_status != valid_dma_status) {
         LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
-        tsc_dma_clear(0);
+        tsc_dma_clear(ifcdevice->node, 0);
         usleep(1000);
-        tsc_dma_free(0);
+        tsc_dma_free(ifcdevice->node, 0);
         usleep(1000);
         return status_read;
     }
     
     /*free DMA channel 0 */
-    status = tsc_dma_free(0);
+    status = tsc_dma_free(ifcdevice->node, 0);
     if (status) 
     {
       LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
@@ -476,12 +469,12 @@ static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
 
 void ifc_stop_timer(struct ifcdaqdrv_dev *ifcdevice) {
     //pevx_timer_stop(ifcdevice->card);
-    tsc_timer_stop();
+    tsc_timer_stop(ifcdevice->node);
 }
 
 void ifc_init_timer(struct ifcdaqdrv_dev *ifcdevice){
     // pevx_timer_start(ifcdevice->card, TIMER_1MHZ ,0);
-    tsc_timer_start(TIMER_1MHZ, 0);
+    tsc_timer_start(ifcdevice->node, TIMER_1MHZ, 0);
 }
 
 uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
@@ -489,7 +482,7 @@ uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
     // struct pevx_time tim;  
     // pevx_timer_read(ifcdevice->card, &tim);
     struct tsc_time tim;
-    tsc_timer_read(&tim);
+    tsc_timer_read(ifcdevice->node, &tim);
 
     return ((uint64_t)tim.msec * 1000) + (uint64_t)(tim.usec & 0x1ffff) / 100;
     

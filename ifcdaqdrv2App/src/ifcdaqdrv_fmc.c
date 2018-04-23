@@ -27,7 +27,7 @@ ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_
     }
 
     for (i = 0; i < 8; i++) {
-        status = tsc_i2c_read(device, 0x7000 + i, &reg_val);
+        status = tsc_i2c_read(ifcdevice->node, device, 0x7000 + i, &reg_val);
         data[i] = (uint8_t)reg_val;
     }
 
@@ -63,7 +63,7 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
             address = tsc_swap_16(address);
         }
 
-        status = tsc_i2c_read(device, address, &reg_val);
+        status = tsc_i2c_read(ifcdevice->node, device, address, &reg_val);
         if (!((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_DONE)) {
             LOG((LEVEL_ERROR,"While calling tsc_i2c_read(), the device did not reply the ack\n"));
             return status_i2c_nack;

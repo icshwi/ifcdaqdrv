@@ -66,8 +66,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* Initialize tsc library */
-
-    node = tsc_init();
+    node = tsc_init(ifcuser->card);
     if (node < 0) {
         status = status_no_device;
         goto err_pevx_init;
@@ -186,6 +185,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
     case IFC1410SCOPEDRV_SCOPE_SIGNATURE:
+    case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
         status = ifcdaqdrv_scope_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
@@ -212,7 +212,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* Enable the CENTRAL FPGA using the PON FPGA (pi c c0000000)*/
-    tsc_pon_write(IFC1410_FMC_EN_OFFSET, &data);
+    tsc_pon_write(ifcdevice->node, IFC1410_FMC_EN_OFFSET, &data);
 
     /* Add device to the list of opened devices */
     list_add_tail(&ifcdevice->list, &ifcdaqdrv_devlist);
@@ -226,7 +226,7 @@ err_read:
 
 err_dev_alloc:
     /* Close pevx library */
-    tsc_exit();
+    tsc_exit(ifcdevice->node);
 
 err_pevx_init:
     /* Unlock device list */
@@ -252,7 +252,7 @@ ifcdaqdrv_status ifcdaqdrv_close_device(struct ifcdaqdrv_usr *ifcuser) {
     if (--ifcdevice->count == 0) {
         list_del(&ifcdevice->list);
         ifcdaqdrv_free(ifcdevice);
-        tsc_exit();
+        tsc_exit(ifcdevice->node);
         free(ifcdevice);
     }
     pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);

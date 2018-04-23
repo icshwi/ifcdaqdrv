@@ -17,8 +17,8 @@
 
 static const double   valid_clocks[] = {5e6, 0};
 
-static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req);
-static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req);
+static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *kbuf_req);
+static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *kbuf_req);
 
 static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     switch (ifcdevice->sample_size) {
@@ -330,7 +330,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     dma_buf->size = 4*(0x1000); //sizeof(*pp_options);	
 
     /* Try to allocate kernel buffer */
-    status = ifcfastintdrv_alloc_tscbuf(dma_buf);
+    status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
     if (status) {
         free(dma_buf);
         LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
@@ -357,7 +357,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(DMA_CHAN_0) == %d \n", __FUNCTION__, status));
         tsc_dma_clear(DMA_CHAN_0);
-        ifcfastintdrv_free_tscbuf(dma_buf);
+        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
         free(dma_buf);
       return status;
     }
@@ -367,7 +367,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
         tsc_dma_clear(DMA_CHAN_0);
-        ifcfastintdrv_free_tscbuf(dma_buf);
+        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
         free(dma_buf);
         return status_read;
     }
@@ -397,7 +397,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     memcpy((void *)pp_options, dma_buf->u_base, sizeof(*pp_options));
 
     /* Clean memory */
-    ifcfastintdrv_free_tscbuf(dma_buf);
+    ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
     free(dma_buf);
 #endif
 
@@ -409,7 +409,7 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     ulong src_addr = PP_OFFSET + addr;
 
     usleep(1000);
-    status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
+    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
@@ -440,7 +440,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     dma_buf->size = sizeof(pp_options);
 
     /* Try to allocate kernel buffer */
-    status = ifcfastintdrv_alloc_tscbuf(dma_buf);
+    status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
     if (status) {
         free(dma_buf);
         LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
@@ -470,7 +470,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
         tsc_dma_clear(0);
-        ifcfastintdrv_free_tscbuf(dma_buf);
+        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
         free(dma_buf);
       return status;
     }
@@ -480,7 +480,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
         tsc_dma_clear(0);
-        ifcfastintdrv_free_tscbuf(dma_buf);
+        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
         free(dma_buf);
         return status_read;
     }
@@ -505,7 +505,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     }
 
     /* Clean memory */
-    ifcfastintdrv_free_tscbuf(dma_buf);
+    ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
     free(dma_buf);
 #endif
 
@@ -520,7 +520,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
 
     usleep(1000);
-    status = tsc_write_blk(dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
+    status = tsc_write_blk(ifcdevice->node, dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
     
     free(mybuffer);
 
@@ -534,7 +534,7 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     return status_success;
 }
 
-static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req) {
+static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *kbuf_req) {
     int ret;
 
     if (!kbuf_req) {
@@ -543,7 +543,7 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
 
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", kbuf_req->size));
-        ret = tsc_kbuf_alloc(kbuf_req);
+        ret = tsc_kbuf_alloc(ifcdevice->node, kbuf_req);
     } while ((ret < 0) && (kbuf_req->size >>= 1) > 0);
 
     if(ret) {
@@ -552,10 +552,10 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
     }
 
     /* Mapping kbuf in userspace */
-    if (tsc_kbuf_mmap(kbuf_req) < 0)  
+    if (tsc_kbuf_mmap(ifcdevice->node, kbuf_req) < 0)
     {
         /* Free the kbuf */
-        tsc_kbuf_free(kbuf_req);
+        tsc_kbuf_free(ifcdevice->node, kbuf_req);
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(kbuf_req) failed\n");
         return status_internal;
     }
@@ -563,8 +563,8 @@ static inline ifcdaqdrv_status ifcfastintdrv_alloc_tscbuf(struct tsc_ioctl_kbuf_
     return status_success;
 }
 
-static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct tsc_ioctl_kbuf_req *kbuf_req) {   
-    if (tsc_kbuf_free(kbuf_req))
+static inline ifcdaqdrv_status ifcfastintdrv_free_tscbuf(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *kbuf_req) {
+    if (tsc_kbuf_free(ifcdevice->node, kbuf_req))
     {
         fprintf(stderr, "[ERROR] tsclib returned error when trying tsc_kbuf_free\n");
         return status_internal;
@@ -587,7 +587,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
     do {
         LOG((LEVEL_INFO, "Trying to allocate %d bytes in kernel\n", ifcdevice->smem_dma_buf->size));
-        ret = tsc_kbuf_alloc(ifcdevice->smem_dma_buf);
+        ret = tsc_kbuf_alloc(ifcdevice->node, ifcdevice->smem_dma_buf);
     } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
     if(ret) {
@@ -597,10 +597,10 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     /* Map kernel space in userspace */
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-    if (tsc_kbuf_mmap(ifcdevice->smem_dma_buf) < 0)  
+    if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->smem_dma_buf) < 0)
     {
         /* Free the kbuf */
-        tsc_kbuf_free(ifcdevice->smem_dma_buf);
+        tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
         free(ifcdevice->smem_dma_buf);
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
         return status_internal;
@@ -610,7 +610,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     return status_success;
 }
 
-inline uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset) {
+uint64_t u64_setclr(uint64_t input, uint64_t bits, uint64_t mask, uint32_t offset) {
     uint64_t output = input & ~(mask << offset); // Clear mask
     output |= bits << offset; // Set bits
     return output;
@@ -678,21 +678,21 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
     //dma_req.size = size; //dma_buf->size | DMA_SIZE_PKT_128;
     dma_req.size = size;
 
-    status = tsc_dma_alloc(CURR_DMA_CHAN);
+    status = tsc_dma_alloc(ifcdevice->node, CURR_DMA_CHAN);
     if (status) 
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(CURR_DMA_CHAN) == %d \n", __FUNCTION__, status));
-        tsc_dma_clear(CURR_DMA_CHAN);
-        tsc_dma_free(CURR_DMA_CHAN);
+        tsc_dma_clear(ifcdevice->node, CURR_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, CURR_DMA_CHAN);
         return status;
     }
 
-    status = tsc_dma_move(&dma_req);
+    status = tsc_dma_move(ifcdevice->node, &dma_req);
     if (status) 
     {
         LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        tsc_dma_clear(CURR_DMA_CHAN);
-        tsc_dma_free(CURR_DMA_CHAN);
+        tsc_dma_clear(ifcdevice->node, CURR_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, CURR_DMA_CHAN);
         return status;
     }
 
@@ -700,24 +700,24 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
     if (dma_req.dma_status & DMA_STATUS_TMO)
     {
         LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
-        tsc_dma_clear(CURR_DMA_CHAN);
-        tsc_dma_free(CURR_DMA_CHAN);
+        tsc_dma_clear(ifcdevice->node, CURR_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, CURR_DMA_CHAN);
         return status;
     }
     else if(dma_req.dma_status & DMA_STATUS_ERR)
     {
         LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
-        tsc_dma_clear(CURR_DMA_CHAN);
-        tsc_dma_free(CURR_DMA_CHAN);
+        tsc_dma_clear(ifcdevice->node, CURR_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, CURR_DMA_CHAN);
         return status;
     }
     
     /*free DMA channel 0 */
-    status = tsc_dma_free(CURR_DMA_CHAN);
+    status = tsc_dma_free(ifcdevice->node, CURR_DMA_CHAN);
     if (status) 
     {
       LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-      tsc_dma_clear(CURR_DMA_CHAN);
+      tsc_dma_clear(ifcdevice->node, CURR_DMA_CHAN);
       return status;
     }
 
@@ -738,7 +738,7 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
     ulong src_addr = RT_OFFSET + addr;
 
     usleep(1000);
-    status = tsc_read_blk(src_addr, (char*) mybuffer, sizeof(*rt_status), blkvar);
+    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*rt_status), blkvar);
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
@@ -779,11 +779,11 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice,
             break;
     }
 
-    tsc_i2c_read(0x40010050, addr, &data);
+    tsc_i2c_read(ifcdevice->node, 0x40010050, addr, &data);
     usleep(5000);
     *value = data;
 
-    tsc_i2c_read(0x40010050, addr+1, &data);
+    tsc_i2c_read(ifcdevice->node, 0x40010050, addr+1, &data);
     *value |= (data<<8);
     usleep(2500);
 
@@ -814,11 +814,11 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
     }
 
     data = value & 0x000000ff;
-    tsc_i2c_write(0x40010050, addr, data);
+    tsc_i2c_write(ifcdevice->node, 0x40010050, addr, data);
     usleep(5000);
 
     data = (value>>8) & 0x000000ff;
-    tsc_i2c_write(0x40010050, addr+1, data);
+    tsc_i2c_write(ifcdevice->node, 0x40010050, addr+1, data);
     usleep(5000);
 
     return status_success;

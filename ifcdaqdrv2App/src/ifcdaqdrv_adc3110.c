@@ -528,7 +528,7 @@ ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned r
     /*TODO: check usage of i2c_read. Who is the first argument ? */
     
     if (ifcdaqdrv_is_byte_order_ppc()) {
-        status  = tsc_i2c_read(device, reg, ui32_reg_val);
+        status  = tsc_i2c_read(ifcdevice->node, device, reg, ui32_reg_val);
 
         /* TODO fix bit mask */
         if ((status & I2C_CTL_EXEC_MASK) == I2C_CTL_EXEC_ERR) {
