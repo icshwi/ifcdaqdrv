@@ -406,6 +406,10 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
 
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        blkvar = tsc_swap_32(blkvar);
+    }
+
     ulong src_addr = PP_OFFSET + addr;
 
     usleep(1000);
@@ -518,6 +522,9 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
 
     ulong dest_addr = PP_OFFSET + addr;
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        blkvar = tsc_swap_32(blkvar);
+    }
 
     usleep(1000);
     status = tsc_write_blk(ifcdevice->node, dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
@@ -734,6 +741,10 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
     ifcdaqdrv_status status;
     int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
+
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        blkvar = tsc_swap_32(blkvar);
+    }
 
     ulong src_addr = RT_OFFSET + addr;
 
