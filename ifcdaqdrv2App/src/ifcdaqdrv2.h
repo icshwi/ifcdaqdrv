@@ -598,6 +598,8 @@ ifcdaqdrv_status ifcdaqdrv_send_configuration_command(struct ifcdaqdrv_usr *ifcu
 ifcdaqdrv_status ifcdaqdrv_set_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t value);
 ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t *value);
 
+ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser);
+
 #ifdef __cplusplus
 }
 #endif
