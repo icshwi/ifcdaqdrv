@@ -104,13 +104,6 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
                                            int channel,
                                            uint32_t value);
 
-
-ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *ifcdevice, 
-                                                        void *dest_buffer, 
-                                                        struct tsc_ioctl_kbuf_req *dma_buf, 
-                                                        uint32_t smem_addr, 
-                                                        uint32_t size);
-
 ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status);
 
 ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, 
