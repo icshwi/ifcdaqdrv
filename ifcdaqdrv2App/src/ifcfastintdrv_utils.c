@@ -32,6 +32,7 @@ static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
     return 0;
 }
 
+/* 8-byte long word endianess conversion */
 static inline void ifcdaqdrv_swap64(uint64_t* destination)
 {
     uint64_t source = *destination;
@@ -44,8 +45,7 @@ static inline void ifcdaqdrv_swap64(uint64_t* destination)
     byte_ppo[0] = byte_aux[7];
     byte_ppo[1] = byte_aux[6];
     byte_ppo[2] = byte_aux[5];
-    byte_ppo[3] = byte_aux[4];
-    
+    byte_ppo[3] = byte_aux[4];  
     byte_ppo[4] = byte_aux[3];
     byte_ppo[5] = byte_aux[2];
     byte_ppo[6] = byte_aux[1];
@@ -314,106 +314,25 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
     return status_success;
 }
 
-#define PP_OFFSET 0x100000
-
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options) {
     
     ifcdaqdrv_status status;
-
-/********************* Read TMEM using DMA engine - TO BE TESTED  ********************************/
-#if 0
-    struct tsc_ioctl_dma_req dma_req = {0};
-    struct tsc_ioctl_kbuf_req *dma_buf;
-
-    /* Allocate a new kbuf handler structure */
-    dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
-    dma_buf->size = 4*(0x1000); //sizeof(*pp_options);	
-
-    /* Try to allocate kernel buffer */
-    status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
-    if (status) {
-        free(dma_buf);
-        LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
-        return status_internal;
-    }
-
-    dma_req.src_addr = (uint64_t) PP_OFFSET + addr;
-    dma_req.src_space = 4; //DMA_SPACE_USR1
-    dma_req.src_mode = 0; //DMA_PCIE_RR2;
-
-    dma_req.des_addr = dma_buf->b_base;
-    dma_req.des_space = DMA_SPACE_PCIE;// | DMA_SPACE_DS;
-    dma_req.des_mode = 0; //DMA_PCIE_RR2;
-
-    dma_req.end_mode   = 0;
-    dma_req.start_mode = (char) DMA_START_CHAN(DMA_CHAN_0);
-    //dma_req.intr_mode  = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
-
-    dma_req.size = 0x08; //dma_buf->size | DMA_SIZE_PKT_128;
-
-    status = tsc_dma_alloc(DMA_CHAN_0);
-    if (status) 
-    {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(DMA_CHAN_0) == %d \n", __FUNCTION__, status));
-        tsc_dma_clear(DMA_CHAN_0);
-        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-        free(dma_buf);
-      return status;
-    }
-
-    status = tsc_dma_move(&dma_req);
-    if (status) 
-    {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        tsc_dma_clear(DMA_CHAN_0);
-        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-        free(dma_buf);
-        return status_read;
-    }
-
-    /* Check for errors */
-    if (dma_req.dma_status & DMA_STATUS_TMO)
-    {
-        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
-        tsc_dma_clear(DMA_CHAN_0);
-    }
-    else if(dma_req.dma_status & DMA_STATUS_ERR)
-    {
-        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
-    }
     
-    /*free DMA channel 0 */
-    status = tsc_dma_free(DMA_CHAN_0);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-      return status_read;
-    }
-
-    /* Copy from kernel space (dma_buf) to userspace (pp_options)
-     * TODO: check for errors and fill buffer with zeros??
-     */
-    memcpy((void *)pp_options, dma_buf->u_base, sizeof(*pp_options));
-
-    /* Clean memory */
-    ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-    free(dma_buf);
-#endif
-
-/********************* Reading TMEM memory space using CPU copy *******************************************/
-#if 1
-    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    /* Prepares the command word for CPU copy|read using tsclib (based on TscMon source code)*/
+    int cmdword = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
 
+    /* if running on little endian machine the command word needs to be converted */
     if (!ifcdaqdrv_is_byte_order_ppc()) {
-        blkvar = tsc_swap_32(blkvar);
+        cmdword = tsc_swap_32(cmdword);
     }
 
-    ulong src_addr = PP_OFFSET + addr;
+    /* address that holds the configuration PP_OPTION for the specific pp block */
+    ulong src_addr = IFCFASTINT_SRAM_PP_OFFSET + addr;
 
+    /* using tsclib to read what is in SRAM 1 area */
     usleep(1000);
-    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*pp_options), blkvar);
+    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*pp_options), cmdword);
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
@@ -421,113 +340,41 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
         return status;
     }
 
+    /* Copying 8 bytes to the 64 bit variable that will be decoded */
     memcpy((void *)pp_options, mybuffer, sizeof(*pp_options));
 
-    ifcdaqdrv_swap64(pp_options);
+    /* if running on BIG ENDIAN machine the 8-byte stream needs to be swapped */
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+    	ifcdaqdrv_swap64(pp_options);
+    }
     free(mybuffer);
-#endif
-/********************************************************************************************************/
 
     return status_success;
 }
 
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options) {
     ifcdaqdrv_status status;
-
-/********************* Read TMEM using DMA engine - TO BE TESTED  ********************************/
-#if 0
-    struct tsc_ioctl_dma_req dma_req = {0};
-    struct tsc_ioctl_kbuf_req *dma_buf;
-
-    /* Allocate a new kbuf handler structure */
-    dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
-    dma_buf->size = sizeof(pp_options);
-
-    /* Try to allocate kernel buffer */
-    status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
-    if (status) {
-        free(dma_buf);
-        LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
-        return status_internal;
-    }
-
-    /* Copy from userspace to kernel space (dma_buf) */
-    memcpy(dma_buf->u_base, (void *)&pp_options, sizeof(pp_options));
-
-    dma_req.des_addr = (uint64_t) PP_OFFSET + addr;
-    dma_req.des_space = 4; //DMA_SPACE_USR1
-    dma_req.des_mode = 0; //DMA_PCIE_RR2;
-
-    dma_req.src_addr = dma_buf->b_base;
-    dma_req.src_space = DMA_SPACE_PCIE | DMA_SPACE_DS;
-    dma_req.src_mode = 0; //DMA_PCIE_RR2;
-
-    dma_req.end_mode   = 0;
-    dma_req.start_mode = (char) DMA_START_CHAN(0);
-    dma_req.intr_mode  = DMA_INTR_ENA;
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);;
-
-    dma_req.size = dma_buf->size | DMA_SIZE_PKT_128;
-
-    status = tsc_dma_alloc(0);
-    if (status) 
-    {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
-        tsc_dma_clear(0);
-        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-        free(dma_buf);
-      return status;
-    }
-
-    status = tsc_dma_move(&dma_req);
-    if (status) 
-    {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        tsc_dma_clear(0);
-        ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-        free(dma_buf);
-        return status_read;
-    }
-
-    /* Check for errors */
-    if (dma_req.dma_status & DMA_STATUS_TMO)
-    {
-        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
-        tsc_dma_clear(0);
-    }
-    else if(dma_req.dma_status & DMA_STATUS_ERR)
-    {
-        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
-    }
-    
-    /*free DMA channel 0 */
-    status = tsc_dma_free(0);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-      return status_read;
-    }
-
-    /* Clean memory */
-    ifcfastintdrv_free_tscbuf(ifcdevice, dma_buf);
-    free(dma_buf);
-#endif
-
-/*************** Write TMEM address space using CPU copy  ****************************************************/
-#if 1 
     void *mybuffer = calloc(1024*1024,1);
 
-    ifcdaqdrv_swap64(&pp_options);
+    /* if running on BIG endian machine, the 8-byte long word needs to be converted to big endian */
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+    	ifcdaqdrv_swap64(&pp_options);
+    }
     memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
 
-    ulong dest_addr = PP_OFFSET + addr;
-    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    /* Sets the PP_OPTION addres of the specific pp block */
+    ulong dest_addr = IFCFASTINT_SRAM_PP_OFFSET + addr;
+
+    /* Prepares the command word for CPU copy using tsclib (based on TscMon source code)*/
+    int cmdword = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    
+    /* if running on little endian machine the command word needs to be converted */
     if (!ifcdaqdrv_is_byte_order_ppc()) {
-        blkvar = tsc_swap_32(blkvar);
+        cmdword = tsc_swap_32(cmdword);
     }
 
     usleep(1000);
-    status = tsc_write_blk(ifcdevice->node, dest_addr, (char*) mybuffer, sizeof(pp_options), blkvar);
+    status = tsc_write_blk(ifcdevice->node, dest_addr, (char*) mybuffer, sizeof(pp_options), cmdword);
     
     free(mybuffer);
 
@@ -535,8 +382,6 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
         LOG((LEVEL_ERROR,"tsc_blk_write() returned %d\n", status));
         return status;
     }
- #endif
-/**************************************************************************************************************/
 
     return status_success;
 }
@@ -612,7 +457,6 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
         return status_internal;
     }
-    
     INFOLOG(("Successfully allocated space in kernel! [%d bytes]\n",ifcdevice->smem_dma_buf->size));
     return status_success;
 }
@@ -739,17 +583,17 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
 ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status) 
 {
     ifcdaqdrv_status status;
-    int blkvar = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    int cmdword = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
     void *mybuffer = calloc(1024*1024,1);
 
     if (!ifcdaqdrv_is_byte_order_ppc()) {
-        blkvar = tsc_swap_32(blkvar);
+        cmdword = tsc_swap_32(cmdword);
     }
 
     ulong src_addr = RT_OFFSET + addr;
 
     usleep(1000);
-    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*rt_status), blkvar);
+    status = tsc_read_blk(fcdevice->node, src_addr, (char*) mybuffer, sizeof(*rt_status), cmdword);
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
@@ -759,7 +603,9 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
 
     memcpy((void *)rt_status, mybuffer, sizeof(*rt_status));
 
-    ifcdaqdrv_swap64(rt_status);
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+    	ifcdaqdrv_swap64(rt_status);
+	}
     free(mybuffer);
 
     return status_success;
@@ -773,30 +619,34 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice,
     uint32_t data = 0;
     uint32_t addr = 0x2000;
 
-    *value = 0;
-
     /**/
     switch (param)
     {
         case ifcfastint_aichannel_gain:
             addr = 0x2000 + (channel*4);
+            *value = 0x8ccc; // Default value is 1
             break;
 
         case ifcfastint_aichannel_offset:
             addr = 0x2002 + (channel*4);
+            *value = 0x8000;  // Default value is 0
             break;
 
         default:
             break;
     }
 
-    tsc_i2c_read(ifcdevice->node, 0x40010050, addr, &data);
-    usleep(5000);
-    *value = data;
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+        *value = 0;
 
-    tsc_i2c_read(ifcdevice->node, 0x40010050, addr+1, &data);
-    *value |= (data<<8);
-    usleep(2500);
+        tsc_i2c_read(0x40010050, addr, &data);
+        usleep(5000);
+        *value = data;
+
+        tsc_i2c_read(0x40010050, addr+1, &data);
+        *value |= (data<<8);
+        usleep(2500);
+    } 
 
     return status_success;
 } 
@@ -824,13 +674,15 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
             break;
     }
 
-    data = value & 0x000000ff;
-    tsc_i2c_write(ifcdevice->node, 0x40010050, addr, data);
-    usleep(5000);
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+        data = value & 0x000000ff;
+        tsc_i2c_write(0x40010050, addr, data);
+        usleep(5000);
 
-    data = (value>>8) & 0x000000ff;
-    tsc_i2c_write(ifcdevice->node, 0x40010050, addr+1, data);
-    usleep(5000);
+        data = (value>>8) & 0x000000ff;
+        tsc_i2c_write(0x40010050, addr+1, data);
+        usleep(5000);
+    }
 
     return status_success;
 }

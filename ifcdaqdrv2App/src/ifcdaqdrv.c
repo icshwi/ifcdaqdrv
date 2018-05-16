@@ -1961,4 +1961,25 @@ ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t c
     return ifcdevice->get_digiout(ifcuser->device, channel, value);
 }
 
+ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+    if (!ifcdevice->set_digiout) {
+        return status_no_support;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    status = (ifcdaqdrv_status) ifcdaqdrv_is_byte_order_ppc();
+    
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
 

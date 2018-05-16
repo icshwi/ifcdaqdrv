@@ -42,8 +42,18 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     i32_reg_val = buf_end + (buf_start >> 16);
 
-    /* Configure the history frame to be saved as BIG ENDIAN */
-    i32_reg_val |= IFCFASTINT_BUF_BIGENDIAN_MASK;   
+    /* if running on BIG endian machine, enable the firmware option to record the history buffer
+	 * as big endian. It will then swap the 64 bytes frame on a 4 byte basis, causing the 16-bit
+	 * analog channels neigbours to be inverted.
+	 *
+	 * |-------LITTE ENDIAN--------|--------|-------- BIG ENDIAN---------|
+	 * |ch0_b0|ch0_b1|ch1_b0|ch1_b1| ---->> |ch1_b1||ch1_b0|ch0_b1|ch0_b0| 
+	 *
+     */
+    if (ifcdaqdrv_is_byte_order_ppc()) {
+	    /* Configure the history frame to be saved as BIG ENDIAN */
+	    i32_reg_val |= IFCFASTINT_BUF_BIGENDIAN_MASK;   
+	}
 
     /* Write to register 0x68 */
     status = ifc_xuser_tcsr_write(ifcdevice, IFCFASTINT_BUF_SIZE_REG, i32_reg_val);
