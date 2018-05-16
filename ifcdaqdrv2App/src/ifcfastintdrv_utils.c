@@ -287,6 +287,11 @@ void ifcfastint_print_status(int32_t reg) {
 
 ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
     
+    ifcdaqdrv_status status;
+    status = adc3117_get_signature(ifcdevice, NULL, NULL, &ifcdevice->board_id);
+    if (status)
+        return status;
+
     /* Activate FMC */
     ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
     usleep(10000);
@@ -593,7 +598,7 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
     ulong src_addr = RT_OFFSET + addr;
 
     usleep(1000);
-    status = tsc_read_blk(fcdevice->node, src_addr, (char*) mybuffer, sizeof(*rt_status), cmdword);
+    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*rt_status), cmdword);
 
     if (status) {
         LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
@@ -639,11 +644,11 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice,
     if (ifcdaqdrv_is_byte_order_ppc()) {
         *value = 0;
 
-        tsc_i2c_read(0x40010050, addr, &data);
+        tsc_i2c_read(ifcdevice->node, 0x40010050, addr, &data);
         usleep(5000);
         *value = data;
 
-        tsc_i2c_read(0x40010050, addr+1, &data);
+        tsc_i2c_read(ifcdevice->node, 0x40010050, addr+1, &data);
         *value |= (data<<8);
         usleep(2500);
     } 
@@ -676,11 +681,11 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
 
     if (ifcdaqdrv_is_byte_order_ppc()) {
         data = value & 0x000000ff;
-        tsc_i2c_write(0x40010050, addr, data);
+        tsc_i2c_write(ifcdevice->node, 0x40010050, addr, data);
         usleep(5000);
 
         data = (value>>8) & 0x000000ff;
-        tsc_i2c_write(0x40010050, addr+1, data);
+        tsc_i2c_write(ifcdevice->node, 0x40010050, addr+1, data);
         usleep(5000);
     }
 
