@@ -116,15 +116,15 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
-        LOG((LEVEL_NOTICE, "Generic DAQ Application\n"));
+        INFOLOG(("Generic DAQ Application\n"));
         /* Recognized scope implementation. */
         break;
     case IFC1210FASTINT_APP_SIGNATURE:
-        LOG((LEVEL_NOTICE, "Fast Interlock Application\n"));
+        INFOLOG(("Fast Interlock Application\n"));
         /* Recognized fast interlock implementation */
         break;
     default:
-        LOG((LEVEL_NOTICE, "Firmware application not supported\n"));
+        INFOLOG(("Firmware application not supported\n"));
         // Skip all signature verification for now...
         //status = status_incompatible;
         //goto err_read;
