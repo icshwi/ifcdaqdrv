@@ -329,6 +329,9 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uin
 
     /* address that holds the configuration PP_OPTION for the specific pp block */
     ulong src_addr = IFCFASTINT_SRAM_PP_OFFSET + addr;
+
+    /* using tsclib to read what is in SRAM 1 area */
+    usleep(1000);
     status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, sizeof(*pp_options), cmdword);
 
     if (status) {
@@ -353,13 +356,13 @@ ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, ui
     ifcdaqdrv_status status;
     void *mybuffer = calloc(1024*1024,1);
 
-    /* if running on BIG endian machine, the 8-byte long word needs to be converted to little endian */
+    /* if running on BIG endian machine, the 8-byte long word needs to be converted to big endian */
     if (ifcdaqdrv_is_byte_order_ppc()) {
     	ifcdaqdrv_swap64(&pp_options);
     }
     memcpy(mybuffer, (void *)&pp_options, sizeof(pp_options));
 
-    /* Sets the PP_OPTION address of the specific pp block */
+    /* Sets the PP_OPTION addres of the specific pp block */
     ulong dest_addr = IFCFASTINT_SRAM_PP_OFFSET + addr;
 
     /* Prepares the command word for CPU copy using tsclib (based on TscMon source code)*/
