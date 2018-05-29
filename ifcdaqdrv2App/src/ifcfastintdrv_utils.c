@@ -616,42 +616,85 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
     return status_success;
 }
 
+/*
+    FMC EEPROM Analog Channels Parameters
+    ADDR OFFSET = 0x2000
+    Each parameter (gain, offset, egu max, egu min) is stored as DOUBLE - 8 bytes
+
+    | addr |             |             |             |             |
+    |      |    0x00     |   0x08      |   0x10      |   0x18      |
+    | 0x00 | ch0 er gain | ch0 er off  | ch0 egu max | ch0 egu min | 
+    | 0x20 | ch1 er gain | ch1 er off  | ch1 egu max | ch1 egu min | 
+    | 0x40 | ch2 er gain | ch2 er off  | ch2 egu max | ch2 egu min | 
+    | 0x60 | ch3 er gain | ch3 er off  | ch3 egu max | ch3 egu min | 
+
+*/
+
+#define IFCFASTINT_EEPROM_OFFSET  0x2000
+#define IFCFASTINT_EEPROM_PAYLOAD 0x20
+#define IFCFASTINT_EEPROM_ERGAIN_OFFSET 0x00
+#define IFCFASTINT_EEPROM_EROFF_OFFSET  0x08
+#define IFCFASTINT_EEPROM_EGUMAX_OFFSET 0x10
+#define IFCFASTINT_EEPROM_EGUMIN_OFFSET 0x18
+
 ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, 
                                            ifcfastint_aichannel_param param,
                                            int channel,
-                                           uint32_t *value)
+                                           double *value)
 {
-    uint32_t data = 0;
-    uint32_t addr = 0x2000;
+    uint32_t addr = IFCFASTINT_EEPROM_OFFSET + (channel*IFCFASTINT_EEPROM_PAYLOAD);
+    int device = 0x40010050;
+
+    char str_gain[16] = "GAIN ERROR";
+    char str_offs[16] = "OFFSET ERROR";
+    char str_eguh[16] = "EGU MAX";
+    char str_egul[16] = "EGU MIN";
+    char str_err[16] = "OK";
 
     /**/
     switch (param)
     {
-        case ifcfastint_aichannel_gain:
-            addr = 0x2000 + (channel*4);
-            *value = 0x8ccc; // Default value is 1
+        case ifcfastint_aichannel_ergain:
+            addr += IFCFASTINT_EEPROM_ERGAIN_OFFSET;
+            strcpy(str_err, str_gain);
             break;
 
-        case ifcfastint_aichannel_offset:
-            addr = 0x2002 + (channel*4);
-            *value = 0x8000;  // Default value is 0
+        case ifcfastint_aichannel_eroffset:
+            addr += IFCFASTINT_EEPROM_EROFF_OFFSET;
+            strcpy(str_err, str_offs);
             break;
 
+        case ifcfastint_aichannel_egumax:
+            addr += IFCFASTINT_EEPROM_EGUMAX_OFFSET;
+            strcpy(str_err, str_eguh);
+            break;
+
+        case ifcfastint_aichannel_egumin:
+            addr += IFCFASTINT_EEPROM_EGUMIN_OFFSET;
+            strcpy(str_err, str_egul);
         default:
             break;
     }
 
-    if (ifcdaqdrv_is_byte_order_ppc()) {
-        *value = 0;
+    uint32_t data, iter;
+    uint8_t *byte_aux = (uint8_t *) value;
+	uint8_t test_byte = 0xff;
 
-        tsc_i2c_read(ifcdevice->node, 0x40010050, addr, &data);
-        usleep(5000);
-        *value = data;
+    
+    for (iter = 0; iter < sizeof(double); iter++)
+    {
+        tsc_i2c_read(ifcdevice->node, device, (addr+iter), &data);
+        usleep(500);
+        *byte_aux = (uint8_t) data;
+        test_byte &= *byte_aux;
+        byte_aux++;
+    }
 
-        tsc_i2c_read(ifcdevice->node, 0x40010050, addr+1, &data);
-        *value |= (data<<8);
-        usleep(2500);
-    } 
+    /* if this area is empty (0xff) the function will return error - the upstream layer will ignore and use a standard value */
+	if (test_byte == 0xff) {
+		INFOLOG(("ADC3117 calibration - EEPROM is empty for channel %d - parameter %s. Using standard value.\n", channel, str_err));
+		return status_no_support;
+	}
 
     return status_success;
 } 
@@ -659,35 +702,46 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice,
 ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice, 
                                            ifcfastint_aichannel_param param,
                                            int channel,
-                                           uint32_t value)
+                                           double value)
 {
-    uint32_t data = 0;
-    uint32_t addr = 0x2000;
+    uint32_t addr = IFCFASTINT_EEPROM_OFFSET + (channel*IFCFASTINT_EEPROM_PAYLOAD);
+	int device = 0x40010050;
 
     /**/
     switch (param)
     {
-        case ifcfastint_aichannel_gain:
-            addr = 0x2000 + (channel*4);
+        case ifcfastint_aichannel_ergain:
+            addr += IFCFASTINT_EEPROM_ERGAIN_OFFSET;
             break;
 
-        case ifcfastint_aichannel_offset:
-            addr = 0x2002 + (channel*4);
+        case ifcfastint_aichannel_eroffset:
+            addr += IFCFASTINT_EEPROM_EROFF_OFFSET;
             break;
 
+        case ifcfastint_aichannel_egumax:
+            addr += IFCFASTINT_EEPROM_EGUMAX_OFFSET;
+            break;
+
+        case ifcfastint_aichannel_egumin:
+            addr += IFCFASTINT_EEPROM_EGUMIN_OFFSET;
         default:
             break;
     }
 
-    if (ifcdaqdrv_is_byte_order_ppc()) {
-        data = value & 0x000000ff;
-        tsc_i2c_write(ifcdevice->node, 0x40010050, addr, data);
+    uint32_t data, iter;
+    uint8_t *byte_aux = (uint8_t *) &value;
+    
+    for (iter = 0; iter < sizeof(double); iter++)
+    {
+        data = (uint32_t) *byte_aux;
+        tsc_i2c_write(ifcdevice->node, device, (addr+iter), data);
         usleep(5000);
-
-        data = (value>>8) & 0x000000ff;
-        tsc_i2c_write(ifcdevice->node, 0x40010050, addr+1, data);
-        usleep(5000);
+        byte_aux++;
     }
 
     return status_success;
+
+
+
+
 }
