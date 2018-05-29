@@ -7,6 +7,8 @@
 #include <linux/types.h>
 
 #include "ifcdaqdrv2.h"
+#include "ifcfastintdrv2.h"
+
 
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
 
@@ -68,10 +70,6 @@
 #define IFCFASTINT_BUF_TST_MASK 		0x80000000	
 #define IFCFASTINT_BUF_BIGENDIAN_MASK 	0x40000000	
 
-typedef enum {
-  ifcfastint_aichannel_gain,
-  ifcfastint_aichannel_offset
-} ifcfastint_aichannel_param;
 
 
 ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice);
@@ -98,21 +96,13 @@ ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, ui
 ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, 
                                            ifcfastint_aichannel_param param,
                                            int channel,
-                                           uint32_t *value);
+                                           double *value);
 ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice, 
                                            ifcfastint_aichannel_param param,
                                            int channel,
-                                           uint32_t value);
+                                           double value);
 
 ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status);
 
-ifcdaqdrv_status ifcfastintdrv_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, 
-                                           ifcfastint_aichannel_param param,
-                                           int channel,
-                                           uint32_t *value);
-ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice, 
-                                           ifcfastint_aichannel_param param,
-                                           int channel,
-                                           uint32_t value);
 
 #endif /* _IFCFASTINT_UTILS_H_ */

@@ -58,6 +58,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
                 continue;
             }
 
+
+            INFOLOG(("Device already opened!\n"));
             ifcuser->device = ifcdevice;
             ifcdevice->count++;
             pthread_mutex_unlock(&ifcdaqdrv_devlist_lock);

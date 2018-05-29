@@ -1827,7 +1827,9 @@ ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser)
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_set_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t gain)
+/****************************************************************/
+
+ifcdaqdrv_status ifcfastint_set_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double value)
 {
     struct ifcdaqdrv_dev *ifcdevice;
 
@@ -1836,14 +1838,18 @@ ifcdaqdrv_status ifcfastint_set_aich_gain(struct ifcdaqdrv_usr *ifcuser, int cha
         return status_no_device;
     }
 
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        return status_no_support;
+    }
+
     pthread_mutex_lock(&ifcdevice->lock);
-    ifcfastintdrv_eeprom_write(ifcdevice, ifcfastint_aichannel_gain, channel, gain);
+    ifcfastintdrv_eeprom_write(ifcdevice, aiparam, channel, value);
     pthread_mutex_unlock(&ifcdevice->lock);
 
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_get_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *gain)
+ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double *value)
 {
     struct ifcdaqdrv_dev *ifcdevice;
 
@@ -1852,40 +1858,12 @@ ifcdaqdrv_status ifcfastint_get_aich_gain(struct ifcdaqdrv_usr *ifcuser, int cha
         return status_no_device;
     }
 
-    pthread_mutex_lock(&ifcdevice->lock);
-    ifcfastintdrv_eeprom_read(ifcdevice, ifcfastint_aichannel_gain, channel, gain);
-    pthread_mutex_unlock(&ifcdevice->lock);
-
-    return status_success;
-}
-
-ifcdaqdrv_status ifcfastint_set_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t offset)
-{
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        return status_no_support;
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
-    ifcfastintdrv_eeprom_write(ifcdevice, ifcfastint_aichannel_offset, channel, offset);
-    pthread_mutex_unlock(&ifcdevice->lock);
-
-    return status_success;
-}
-
-ifcdaqdrv_status ifcfastint_get_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *offset)
-{
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    pthread_mutex_lock(&ifcdevice->lock);
-    ifcfastintdrv_eeprom_read(ifcdevice, ifcfastint_aichannel_offset, channel, offset);
+    ifcfastintdrv_eeprom_read(ifcdevice, aiparam, channel, value);
     pthread_mutex_unlock(&ifcdevice->lock);
 
     return status_success;

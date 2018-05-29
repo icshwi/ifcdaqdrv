@@ -113,6 +113,14 @@ typedef enum {
 	ifcfastint_history_ended
 } ifcfastint_hist_state;
 
+typedef enum {
+  ifcfastint_aichannel_ergain,
+  ifcfastint_aichannel_eroffset,
+  ifcfastint_aichannel_egumax,
+  ifcfastint_aichannel_egumin
+} ifcfastint_aichannel_param;
+
+
 /* Masks used on history mode configuration to identify which options will write */
 #define IFCFASTINT_HISTORY_ENABLE_W	(1<<0)
 #define IFCFASTINT_HISTORY_MODE_W	(1<<1)
@@ -455,10 +463,9 @@ ifcdaqdrv_status ifcfastint_get_rtstatus(struct ifcdaqdrv_usr *ifcuser,
 
 ifcdaqdrv_status ifcfastint_init_dio3118(struct ifcdaqdrv_usr *ifcuser);
 ifcdaqdrv_status ifcfastint_history_reset(struct ifcdaqdrv_usr *ifcuser);
-ifcdaqdrv_status ifcfastint_set_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t gain);
-ifcdaqdrv_status ifcfastint_get_aich_gain(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *gain);
-ifcdaqdrv_status ifcfastint_set_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t offset);
-ifcdaqdrv_status ifcfastint_get_aich_offset(struct ifcdaqdrv_usr *ifcuser, int channel, uint32_t *offset);
+
+ifcdaqdrv_status ifcfastint_set_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double value);
+ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double *value);
 
 #ifdef __cplusplus
 }
