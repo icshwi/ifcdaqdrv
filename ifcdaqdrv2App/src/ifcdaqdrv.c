@@ -52,7 +52,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     list_for_each_entry(ifcdevice, &ifcdaqdrv_devlist, list){
         if (ifcdevice->card == ifcuser->card && ifcdevice->fmc == ifcuser->fmc) {
             /* Try reading from the device to check that it is physically present. */
-            status = ifc_xuser_tcsr_read(ifcuser->device, 0, &i32_reg_val);
+            status = ifc_xuser_tcsr_read(ifcdevice, 0, &i32_reg_val);
 
             if (status) {
                 continue;
