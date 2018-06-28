@@ -280,7 +280,41 @@ err_sram_ctl:
 
 }
 
+/**
+ * This is a helper function that shows how to use tsc_dma_transfer function.
+ */
+ifcdaqdrv_status
+ifcdaqdrv_dma_read_unlocked2(struct ifcdaqdrv_dev *ifcdevice
+			    , dma_addr_t src_addr
+			    , uint8_t src_space
+			    , uint8_t src_mode
+			    , dma_addr_t des_addr
+			    , uint8_t des_space
+			    , uint8_t des_mode
+			    , uint32_t size)
+{
+    struct tsc_ioctl_dma_req dma_req = {0};
+    int status;
 
+    dma_req.src_addr  = src_addr;
+    dma_req.src_space = src_space;
+    dma_req.src_mode  = 0;
+    dma_req.des_addr  = des_addr;
+    dma_req.des_space = des_space;
+    dma_req.des_mode  = 0;
+    dma_req.size       = size;
+    dma_req.end_mode   = 0;
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = 0;
+    dma_req.fmc        = ifcdevice->fmc;
+
+    status = tsc_dma_transfer(ifcdevice->node, &dma_req);
+    if (status) {
+        LOG((LEVEL_ERROR, "tsc_dma_transfer() returned 0x%x, DMA status 0x%08x\n", status, dma_req.dma_status));
+        return status;
+    }
+    return  status_success;
+}
 
 /**
  * This is a helper function that reads from FPGA Block RAM named USR1 for FMC1 or USR2 for FMC2.
