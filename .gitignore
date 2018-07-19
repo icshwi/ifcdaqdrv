@@ -20,3 +20,6 @@ O.*
 #configure/O.*
 #ifcdaqdrv2App/Db/O.*
 #ifcdaqdrv2App/src/O.*
+.cvsignore
+ifcdaqdrv2.Makefile
+
