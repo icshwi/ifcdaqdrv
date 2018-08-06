@@ -70,7 +70,8 @@ ifcdaqdrv_status ifcfastintdrv_init_adc(struct ifcdaqdrv_dev *ifcdevice) {
         return status;
  
     /* Set ADC inputs to the front panel connector */
-    status = adc3117_set_adc_channel_negative_input(ifcdevice, GND); // ADC channel negative input
+    //status = adc3117_set_adc_channel_negative_input(ifcdevice, GND); // ADC channel negative input
+    status = adc3117_set_adc_channel_negative_input(ifcdevice, FROM_CONNECTOR); // ADC channel negative input
     if (status)
         return status;
 
