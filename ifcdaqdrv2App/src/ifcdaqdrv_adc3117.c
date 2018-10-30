@@ -110,7 +110,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->vref_max = 10.24;
 
     ifcdevice->armed       = 0;
-    ifcdevice->poll_period = 1000;
+    ifcdevice->poll_period = 10;
 
     status = adc3117_get_sram_nsamples_max(ifcdevice, &nsamples_max);
     if (status) {

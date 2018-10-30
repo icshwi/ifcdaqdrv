@@ -431,6 +431,9 @@ ifcdaqdrv_status ifcdaqdrv_disarm_device(struct ifcdaqdrv_usr *ifcuser){
         return status_no_device;
     }
 
+    if (!ifcdevice->armed)
+        return status_success;
+
     pthread_mutex_lock(&ifcdevice->lock);
 
     if (ifcdevice->board_id == 0x3117) {
@@ -498,9 +501,9 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
 
     if (ifcdevice->board_id == 0x3117) {
         do {
-            status = ifc_scope_tcsr_read(ifcdevice, 0x2, &i32_reg_val);
+            status = ifc_scope_tcsr_read(ifcdevice, 0x9, &i32_reg_val);
             usleep(ifcdevice->poll_period);
-        } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00080000) != 0x0));
+        } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00000080) != 0x00000080));
     } else {
         do {
             status = ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_TCSR_CS_REG, &i32_reg_val);
