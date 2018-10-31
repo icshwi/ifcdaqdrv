@@ -326,7 +326,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
     if (ifcdevice->board_id == 0x3117) {
         for (i = 0; i < 5; i++)
         {
-            status = ifc_scope_tcsr_read(ifcdevice, 0x5, &i32_reg_val);
+            status = ifc_scope_tcsr_read(ifcdevice, ADC3117_FMC_STATUS_REG, &i32_reg_val);
             if ((i32_reg_val & 0x3) == 0x3) // Clock ready and init done
             {
                 break;
@@ -358,10 +358,10 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
 
     /* Arm device */
     if (ifcdevice->board_id == 0x3117) {
-        status = ifc_scope_tcsr_write(ifcdevice, 0x1, 0xFFFFF000);
-        status += ifc_scope_tcsr_write(ifcdevice, 0x2, 0x2);
-        status += ifc_scope_tcsr_write(ifcdevice, 0x8, 0xFFFFF000);
-        status += ifc_scope_tcsr_write(ifcdevice, 0x9, 0x2);
+        status = ifc_scope_tcsr_write(ifcdevice, ADC3117_ACQ_CHANNEL_SEL_REG, 0xFFFFF000);
+        status += ifc_scope_tcsr_write(ifcdevice, ADC3117_ACQ_CONTROL_STATUS_REG, 0x202);
+        status += ifc_scope_tcsr_write(ifcdevice, ADC3117_SBUF_SELECT_REG, 0xFFFFF000);
+        status += ifc_scope_tcsr_write(ifcdevice, ADC3117_SBUF_CONTROL_STATUS_REG, 0x2);
         
         if (status) {
             pthread_mutex_unlock(&ifcdevice->lock);
@@ -437,8 +437,8 @@ ifcdaqdrv_status ifcdaqdrv_disarm_device(struct ifcdaqdrv_usr *ifcuser){
     pthread_mutex_lock(&ifcdevice->lock);
 
     if (ifcdevice->board_id == 0x3117) {
-        ifc_scope_tcsr_write(ifcdevice, 0x9, 0x4);
-        ifc_scope_tcsr_write(ifcdevice, 0x2, 0x0);
+        ifc_scope_tcsr_write(ifcdevice, ADC3117_SBUF_CONTROL_STATUS_REG, 0x4);
+        ifc_scope_tcsr_write(ifcdevice, ADC3117_ACQ_CONTROL_STATUS_REG, 0x0);
     } else {
         /* Set "Acquisition STOP/ABORT" bit and "ACQ mode single" bit. Single
          * mode has to be set to disable a continuous acquisition. */
@@ -501,7 +501,7 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
 
     if (ifcdevice->board_id == 0x3117) {
         do {
-            status = ifc_scope_tcsr_read(ifcdevice, 0x9, &i32_reg_val);
+            status = ifc_scope_tcsr_read(ifcdevice, ADC3117_SBUF_CONTROL_STATUS_REG, &i32_reg_val);
             usleep(ifcdevice->poll_period);
         } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00000080) != 0x00000080));
     } else {
@@ -1277,7 +1277,7 @@ ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
 
     if (ifcdevice->board_id == 0x3117) {
         LOG((LEVEL_DEBUG, "Not valid operation on ADC3117\n"));
-        return status_no_support; //Maybe return status_no_support?
+        return status_no_support;
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
@@ -1308,7 +1308,7 @@ ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     if (ifcdevice->board_id == 0x3117) {
         LOG((LEVEL_DEBUG, "Not valid operation on ADC3117\n"));
         *npretrig = 0;
-        return status_no_support; //Maybe return status_no_support?
+        return status_no_support;
     }
 
     if (!npretrig) {

@@ -21,7 +21,7 @@ static ifcdaqdrv_status adc3117_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcd
     int32_t i32_reg_val;
     int     status;
 
-    status = ifc_fmc_tcsr_read(ifcdevice, 0x1, &i32_reg_val);
+    status = ifc_fmc_tcsr_read(ifcdevice, ADC3117_MCSR_REG, &i32_reg_val);
 
     switch ((i32_reg_val & 0x0C000000) >> 26) {
     case 0:
@@ -56,7 +56,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
         return status;
 
     /* Activate FMC */
-    status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31170000);
+    status = ifc_fmc_tcsr_write(ifcdevice, ADC3117_SIGN_REG, 0x31170000);
     //usleep(200000);	
     
     ifcdevice->init_adc              = adc3117_init_adc;
@@ -117,7 +117,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
         return status;
     }
     ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
-    ifcdevice->smem_size = 0x100000;
+    ifcdevice->smem_size = 4 * 1024 * 1024;
 
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
@@ -547,14 +547,14 @@ ifcdaqdrv_status adc3117_set_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double
     if ((value > 0) && (value < 20))
         value = 20;
 
-    return ifc_scope_tcsr_setclr(ifcdevice, 0x2, value << 16, 0xFFFF0000);
+    return ifc_scope_tcsr_setclr(ifcdevice, ADC3117_ACQ_CONTROL_STATUS_REG, value << 16, 0xFFFF0000);
 }
 
 ifcdaqdrv_status adc3117_get_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double *sample_rate) {
     ifcdaqdrv_status status;
     int32_t i32_reg_val;
 
-    status = ifc_scope_tcsr_read(ifcdevice, 0x2, &i32_reg_val);
+    status = ifc_scope_tcsr_read(ifcdevice, ADC3117_ACQ_CONTROL_STATUS_REG, &i32_reg_val);
     if ((i32_reg_val >> 16) == 0)
         *sample_rate = 5000000;
     else
