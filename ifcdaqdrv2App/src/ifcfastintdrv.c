@@ -32,13 +32,8 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Setup the size of the ring buffer */
     
-    /**************************************************************************/
-    /* Current RFLPS FIM firmware is using only 512 kB of internal FPGA memory*/
-    /* buffer boundaries are FORCED to 0x0000 ---> 0x80000                    */
-    /**************************************************************************/
-
     intptr_t buf_start = 0x00000000;
-    intptr_t buf_end   = 0x00100000; // Have to write 0x100000 but real number is 0x80000 
+    intptr_t buf_end   = 0x0ff00000; //max allowed = 255 MB
 
     i32_reg_val = buf_end + (buf_start >> 16);
 
@@ -50,6 +45,7 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 	 * |ch0_b0|ch0_b1|ch1_b0|ch1_b1| ---->> |ch1_b1||ch1_b0|ch0_b1|ch0_b0| 
 	 *
      */
+
     if (ifcdaqdrv_is_byte_order_ppc()) {
 	    /* Configure the history frame to be saved as BIG ENDIAN */
 	    i32_reg_val |= IFCFASTINT_BUF_BIGENDIAN_MASK;   
@@ -250,8 +246,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count,
-        void *data, size_t *nelm) {
+ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t i32_reg_val;
@@ -268,19 +263,12 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 
     pthread_mutex_lock(&ifcdevice->lock);
 
-
-    /**************************************************************************/
-    /* Current RFLPS FIM firmware is using only 512 kB of internal FPGA memory*/
-    /* buffer boundaries are FORCED to 0x0000 ---> 0x80000*/
-    /**************************************************************************/
-
-/* Use a fixed buffer size until DDR/SMEM access is not fixed  */
-#if 0
     // Get circular buffer size
     // Top 16 bits are buffer end pointer, lower 16 bits are buffer start pointer.
-    size_t buf_size;
-    intptr_t buf_start;
-    intptr_t buf_end;
+    uint32_t buf_size;
+    uint32_t buf_start;
+    uint32_t buf_end;
+    
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_SIZE_REG, &i32_reg_val);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
@@ -288,29 +276,20 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     
 
-    buf_start = ((i32_reg_val & 0xFFFF) << 16) + 64; // First history slot is special
-    buf_end = (i32_reg_val & 0x1FFF0000); // This points to first item *after* the buffer
+    buf_start = (((uint32_t)i32_reg_val & 0x0FF0) << 16); // MBytes granularity
+    buf_end = ((uint32_t)i32_reg_val & 0x0FF00000); // This points to first item *after* the buffer
     buf_size = buf_end - buf_start;
-#else 
-    size_t buf_size;
-    intptr_t buf_start;
-    intptr_t buf_end;
 
-
-    buf_start = 0;
-    buf_end = 0x80000;
-    buf_size = buf_end - buf_start;
-#endif
-
-    intptr_t content_start;
-    intptr_t content_end;
+    uint32_t content_start;
+    uint32_t content_end;
+    
     // Store read pointer in `content_start`
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_R_PTR_REG, &i32_reg_val);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
-    content_start = i32_reg_val;
+    content_start = (uint32_t) i32_reg_val;
 
     // Store write pointer in `content_end`
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
@@ -322,20 +301,20 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
      */
-    //content_end = i32_reg_val - 3*64;
-    content_end = i32_reg_val - 1*64;
+
+    content_end = (uint32_t) i32_reg_val - 2*64;
     if(content_end < buf_start) {
             content_end += buf_size;
     }
 
-
     if(content_end < buf_start || content_start < buf_start) {
-        LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
-        LOG((LEVEL_ERROR, "%s\n", "Internal error.. Content pointers are outside buffer area."));
+        //LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
+        //LOG((LEVEL_ERROR, "%s\n", "Internal error.. Content pointers are outside buffer area."));
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_internal;
     }
 
+    /* Guard for number of frames */
     if (!count && content_end > content_start) {
         size = content_end - content_start;
     } else if (!count) {
@@ -347,26 +326,25 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     *nelm = size/64;
 
-    // New content_start. `content_start` might end up outside the buffer
-    content_start = content_end - size;
-
     // Bail early if 0 frames was found
     if(!size) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_success;
     }
 
-    // Check if `content_start` is outside buffer
-    if(content_start > buf_start) {
+    // New content_start. `content_start` might end up outside the buffer
+    //content_start = content_end - size;
+    if(content_end > buf_start + size) {
         ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
                 ifcdevice->smem_dma_buf,
-                content_start,
+                (content_end - size),
                 size
         );
     } else {
-        content_start += buf_size; // content_start is outside the buffer, adjust it to the current size
+        //content_start is outside the buffer, adjust it to the current size
+        content_start = buf_end - (size - (content_end - buf_start)); 
         ifcfastintdrv_read_smem_historybuffer(
                 ifcdevice,
                 data,
