@@ -448,11 +448,23 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
     // dma_buf->u_base is already dma_addr_t, no need to cast to ulong
     // "offset" will be casted 
 
+    uint8_t src_space_;
+    if (ifcdevice->board_id == 0x3117) {
+        src_space_ = DMA_SPACE_USR1;
+    } else {
+        if (ifcdevice->fmc == 1) {
+            src_space_ = DMA_SPACE_USR1;
+        } else {
+            src_space_ = DMA_SPACE_USR2;
+        }
+    }
+
+
     /*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
     status = ifcdaqdrv_dma_read_unlocked(
 					 ifcdevice,
 					 (dma_addr_t) offset, 
-					 ifcdevice->fmc == 1 ? DMA_SPACE_USR1 : DMA_SPACE_USR2, 
+					 src_space_, 
 					 DMA_PCIE_RR2,
 					 dma_buf->b_base, 
 					 ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
