@@ -155,11 +155,11 @@ ifcdaqdrv_status adc3117_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     if (status)
         return status;
 
-    status = adc3117_set_adc_channel_negative_input(ifcdevice, GND); // ADC channel negative input
+    status = adc3117_set_adc_channel_negative_input(ifcdevice, FROM_CONNECTOR); // ADC channel negative input
     if (status)
         return status;
 
-    status = adc3117_set_adc_channel_positive_input(ifcdevice, VCAL); // ADC channel positive input
+    status = adc3117_set_adc_channel_positive_input(ifcdevice, FROM_CONNECTOR); // ADC channel positive input
     if (status)
         return status;
 
