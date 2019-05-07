@@ -1846,3 +1846,73 @@ ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int 
 
     return status_success;
 }
+
+
+ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, ifcfastint_analog_pp ppblock, struct ifcfastint_analog_diag *diag_info) 
+{
+	ifcdaqdrv_status      status;
+	struct ifcdaqdrv_dev *ifcdevice;
+	uint64_t pp_status = 0;
+	uint32_t fpga_mem_address = 0;
+
+	ifcdevice = ifcuser->device;
+	if (!ifcdevice) {
+		return status_no_device;
+	}
+
+/* Current firmware supports only 20 analog inputs */
+	if(channel >= 20) {
+		return status_argument_range;
+	}
+
+	if(!diag_info) {
+		return status_argument_invalid;
+	}
+
+	pthread_mutex_lock(&ifcdevice->lock);
+
+	if ((ppblock != ifcfastint_analog_pp_channel)&&(ppblock != ifcfastint_analog_pp_pwravg))
+	{
+	/* Read the READ_OUT 64-bits register of the standard analog input pre-processing block. */
+		fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + channel*8; // READ_OUT registers starts at 0x200
+
+		usleep(500);
+		/* Read first time */
+		status = ifcfastintdrv_read_pp_status(ifcdevice, fpga_mem_address, &pp_status);
+		if(status) {
+			pthread_mutex_unlock(&ifcdevice->lock);
+			return status_internal;
+		}
+
+		diag_info->process_out = (bool) (pp_status >> 63) & 1;
+		diag_info->dev_val = 0;
+		diag_info->trig_dev_val = 0;
+		diag_info->pres_val = 0;
+		diag_info->trig_val = 0; 
+
+		switch(ppblock) {
+			case ifcfastint_analog_pp_lvlmon:
+				diag_info->pres_val = (pp_status >> 16) & 0xFFFF;
+				diag_info->trig_val = pp_status & 0xFFFF; 
+				break;
+
+			case ifcfastint_analog_pp_pulshp:
+			case ifcfastint_analog_pp_pulrate:
+				diag_info->pres_val = (pp_status >> 32) & 0xFFFFFF;
+				diag_info->trig_val = pp_status & 0xFFFFFF; 
+				break;
+
+			case ifcfastint_analog_pp_devmon:
+				diag_info->dev_val = (pp_status >> 16) & 0xFFFF;
+				diag_info->trig_dev_val = pp_status & 0xFFFF;
+				break;
+
+			default:
+				break;
+
+		}
+	}
+	
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_success;
+}

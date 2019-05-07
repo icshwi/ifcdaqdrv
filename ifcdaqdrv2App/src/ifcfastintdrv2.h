@@ -188,6 +188,15 @@ struct ifcfastint_digital_option {
     bool pre2run;
 };
 
+struct ifcfastint_analog_diag {
+	bool process_out;
+	uint32_t pres_val;
+	uint32_t trig_val;
+	int16_t dev_val;
+	int16_t trig_dev_val;
+};
+
+
 /**
  * @brief Initialize and start FSM
  */
@@ -466,6 +475,8 @@ ifcdaqdrv_status ifcfastint_history_reset(struct ifcdaqdrv_usr *ifcuser);
 
 ifcdaqdrv_status ifcfastint_set_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double value);
 ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double *value);
+
+ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, ifcfastint_analog_pp ppblock, struct ifcfastint_analog_diag *diag_info);
 
 #ifdef __cplusplus
 }

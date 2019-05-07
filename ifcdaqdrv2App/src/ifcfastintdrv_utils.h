@@ -11,6 +11,7 @@
 
 
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
+#define IFCFASTINT_SRAM_PP_STATUS 0x00101000
 
 #define IFCFASTINT_SIGN_REG 0x60
 #define IFCFASTINT_FMC1_CSR_REG 0x61
@@ -75,6 +76,7 @@
 ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status ifcfastintdrv_write_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t pp_options);
 ifcdaqdrv_status ifcfastintdrv_read_pp_conf(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_options);
+ifcdaqdrv_status ifcfastintdrv_read_pp_status(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *pp_status);
 ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status ifcfastintdrv_printregister(uint64_t *pp_register);
 
