@@ -6,6 +6,9 @@
 #include <inttypes.h>
 #include <unistd.h>
 
+#include "tscioctl.h"
+#include "tsculib.h"
+
 #include <ifcdaqdrv2.h>
 #include "ifcdaqdrv_dio3118.h"
 
@@ -85,6 +88,13 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_internal;
+    }
+
+    /* TESTING: enable bit 0 of the timing input mask (register 6C) */
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0x00);
+    if(status) {
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_internal;
     }
 
     /* Basic initialization is done - current STATE of the main state machine is preserved */
@@ -297,6 +307,15 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
+
+    //Now the write pointer is triggered by timing
+    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
+    if(status) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status;
+    }
+    INFOLOG(("Write pointer is at 0x%08x\n", (uint32_t) i32_reg_val));
+
     /*
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
@@ -371,6 +390,35 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }
+
+ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data) {
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int32_t i32_reg_val;
+    size_t size;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if(!data) {
+        return status_argument_invalid;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    // Read 400 kB, from 0x101200 to 0x101600
+    ifcfastintdrv_read_sram_measurements(
+            ifcdevice,
+            data,
+            IFCFASTINT_SRAM_PP_MEASURE
+    );
+   
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status_success;
+}
+
 
 ifcdaqdrv_status ifcfastint_fsm_reset(struct ifcdaqdrv_usr *ifcuser) {
     ifcdaqdrv_status      status;
@@ -846,6 +894,9 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
 		if(write_mask & IFCFASTINT_ANALOG_CVAL_W) {
 			pp_options = u64_setclr(pp_options, (uint16_t)option->cval, 0xFFFF, 0);
 		}
+
+        // Force autorun
+        pp_options = u64_setclr(pp_options, 1, 1, 61);
 
     }
     /*
@@ -1915,4 +1966,72 @@ ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint3
 	
 	pthread_mutex_unlock(&ifcdevice->lock);
 	return status_success;
+}
+
+ifcdaqdrv_status ifcfastint_set_timingmask(struct ifcdaqdrv_usr *ifcuser, uint32_t mask) 
+{
+	ifcdaqdrv_status      status;
+	struct ifcdaqdrv_dev *ifcdevice;
+
+	ifcdevice = ifcuser->device;
+	if (!ifcdevice) {
+		return status_no_device;
+	}
+
+	pthread_mutex_lock(&ifcdevice->lock);
+
+	mask = 0x00000001;
+	
+        status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0x00);
+	if(status) {
+		pthread_mutex_unlock(&ifcdevice->lock);
+		return status_internal;
+	}
+
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_success;
+}
+
+ifcdaqdrv_status ifcfastint_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    struct tsc_ioctl_user_irq tscirq;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    tscirq.irq  = irqn;
+    tscirq.mask = 1 <<irqn;
+    tscirq.wait_mode = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4);
+
+    status = tsc_user_irq_subscribe(ifcdevice->node, &tscirq);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+
+ifcdaqdrv_status ifcfastint_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    struct tsc_ioctl_user_irq tscirq;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    tscirq.irq  = irqn;
+    tscirq.mask = 1 <<irqn;
+    tscirq.wait_mode = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4);
+
+    status = tsc_user_irq_wait(ifcdevice->node, &tscirq);    
+
+    return status;
 }

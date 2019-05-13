@@ -477,6 +477,12 @@ ifcdaqdrv_status ifcfastint_set_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int 
 ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double *value);
 
 ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, ifcfastint_analog_pp ppblock, struct ifcfastint_analog_diag *diag_info);
+ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data);
+ifcdaqdrv_status ifcfastint_set_timingmask(struct ifcdaqdrv_usr *ifcuser, uint32_t mask);
+
+ifcdaqdrv_status ifcfastint_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcfastint_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+
 
 #ifdef __cplusplus
 }

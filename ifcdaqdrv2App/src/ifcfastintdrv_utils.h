@@ -10,8 +10,9 @@
 #include "ifcfastintdrv2.h"
 
 
-#define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
-#define IFCFASTINT_SRAM_PP_STATUS 0x00101000
+#define IFCFASTINT_SRAM_PP_OFFSET  0x00100000
+#define IFCFASTINT_SRAM_PP_STATUS  0x00101000
+#define IFCFASTINT_SRAM_PP_MEASURE 0x00101200
 
 #define IFCFASTINT_SIGN_REG 0x60
 #define IFCFASTINT_FMC1_CSR_REG 0x61
@@ -24,6 +25,10 @@
 #define IFCFASTINT_BUF_SIZE_REG 0x68
 #define IFCFASTINT_BUF_W_PTR_REG 0x69
 #define IFCFASTINT_BUF_R_PTR_REG 0x6A
+
+#define IFCFASTINT_BUF_W_PTR_TIM 0x6B
+#define IFCFASTINT_TIMING_CTL    0x6C
+
 
 #define IFCFASTINT_FSM_MAN_SIGN_MASK                 0x000000FF
 #define IFCFASTINT_FSM_MAN_HISTORY_STATUS_MASK       0x00000300
@@ -105,6 +110,12 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
                                            double value);
 
 ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status);
+
+ifcdaqdrv_status ifcfastintdrv_read_sram_measurements( struct ifcdaqdrv_dev *ifcdevice, 
+                                                        void *dest_buffer, 
+                                                        uint32_t sram_addr); 
+
+
 
 
 #endif /* _IFCFASTINT_UTILS_H_ */

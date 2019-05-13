@@ -422,9 +422,9 @@ ifcdaqdrv_status ifcfastintdrv_read_pp_status(struct ifcdaqdrv_dev *ifcdevice, u
     memcpy((void *)pp_status, mybuffer, sizeof(*pp_status));
 
     /* if running on BIG ENDIAN machine the 8-byte stream needs to be swapped */
-    if (ifcdaqdrv_is_byte_order_ppc()) {
-    	ifcdaqdrv_swap64(pp_status);
-    }
+    // if (ifcdaqdrv_is_byte_order_ppc()) {
+    // 	ifcdaqdrv_swap64(pp_status);
+    // }
     free(mybuffer);
 
     return status_success;
@@ -624,6 +624,108 @@ ifcdaqdrv_status ifcfastintdrv_read_smem_historybuffer( struct ifcdaqdrv_dev *if
     return 0;
 }
 
+
+
+#define MEAS_DMA_CHAN DMA_CHAN_0
+ifcdaqdrv_status ifcfastintdrv_read_sram_measurements( struct ifcdaqdrv_dev *ifcdevice, 
+                                                        void *dest_buffer, 
+                                                        uint32_t sram_addr) 
+{
+    //return status_success;
+
+    ifcdaqdrv_status status;
+    struct tsc_ioctl_dma_req dma_req = {0};
+    struct tsc_ioctl_kbuf_req *dma_buf;
+
+    /* Allocate a new kbuf handler structure */
+    dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
+    dma_buf->size = 4*(0x400); //sizeof(*pp_options);  
+
+    /* Try to allocate kernel buffer */
+    status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
+    if (status) {
+        free(dma_buf);
+        LOG((LEVEL_ERROR, "%s() tsc_kbuf_alloc() failed\n", __FUNCTION__));
+        return status_internal;
+    }
+
+    dma_req.src_addr = (uint64_t) sram_addr;
+    dma_req.src_space = 4; //
+    dma_req.src_mode = 0; //DMA_PCIE_RR2;
+
+    dma_req.des_addr = dma_buf->b_base;
+    dma_req.des_space = ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
+    dma_req.des_mode = 0; //DMA_PCIE_RR2;
+
+    dma_req.end_mode   = 0;
+    dma_req.start_mode = (char) DMA_START_CHAN(MEAS_DMA_CHAN);
+    //dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5<<4);
+
+    //dma_req.size = size; //dma_buf->size | DMA_SIZE_PKT_128;
+    dma_req.size = 0x400;
+
+    status = tsc_dma_alloc(ifcdevice->node, MEAS_DMA_CHAN);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_alloc(MEAS_DMA_CHAN) == %d \n", __FUNCTION__, status));
+        tsc_dma_clear(ifcdevice->node, MEAS_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, MEAS_DMA_CHAN);
+        goto dmaerr;
+    }
+
+    status = tsc_dma_move(ifcdevice->node, &dma_req);
+    if (status) 
+    {
+        LOG((LEVEL_ERROR, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
+        tsc_dma_clear(ifcdevice->node, MEAS_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, MEAS_DMA_CHAN);
+        goto dmaerr;
+    }
+
+    /* Check for errors */
+    if (dma_req.dma_status & DMA_STATUS_TMO)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> timeout | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(ifcdevice->node, MEAS_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, MEAS_DMA_CHAN);
+        goto dmaerr;
+    }
+    else if(dma_req.dma_status & DMA_STATUS_ERR)
+    {
+        LOG((LEVEL_ERROR, "DMA ERROR -> unknown error | status = %08x\n",  dma_req.dma_status));
+        tsc_dma_clear(ifcdevice->node, MEAS_DMA_CHAN);
+        tsc_dma_free(ifcdevice->node, MEAS_DMA_CHAN);
+        goto dmaerr;
+    }
+    
+    /*free DMA channel 0 */
+    status = tsc_dma_free(ifcdevice->node, MEAS_DMA_CHAN);
+    if (status) 
+    {
+      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
+      tsc_dma_clear(ifcdevice->node, MEAS_DMA_CHAN);
+      goto dmaerr;
+    }
+
+    /* Copy from kernel space (dma_buf) to userspace (pp_options)
+     * TODO: check for errors and fill buffer with zeros??
+     */       
+    memcpy(dest_buffer, dma_buf->u_base, (size_t) 0x400);
+    tsc_kbuf_free(ifcdevice->node, dma_buf);
+    free(dma_buf);
+    return 0;
+
+dmaerr:
+    tsc_kbuf_free(ifcdevice->node, dma_buf);
+    free(dma_buf);
+    return status;
+}
+
+
+
+
+
 #define RT_OFFSET 0x300000
 ifcdaqdrv_status ifcfastintdrv_read_rtstatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t addr, uint64_t *rt_status) 
 {
@@ -781,7 +883,10 @@ ifcdaqdrv_status ifcfastintdrv_eeprom_write(struct ifcdaqdrv_dev *ifcdevice,
 
     return status_success;
 
-
-
-
 }
+
+
+
+
+
+
