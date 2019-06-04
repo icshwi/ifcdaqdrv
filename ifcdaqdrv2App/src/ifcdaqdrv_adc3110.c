@@ -59,7 +59,7 @@ ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice) {
 }
 
 ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
-    int status = 0;
+    int status = 0, i = 0;
     uint32_t nsamples_max;
 
     /* Activate FMC */
@@ -97,8 +97,10 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->nchannels   = 8;
 
     /* Filling buffers with ONE */
-    memset((uint32_t*) ifcdevice->decimations, 1, sizeof(ifcdevice->decimations)/sizeof(uint32_t));
-    memset((uint32_t*) ifcdevice->averages, 1, sizeof(ifcdevice->averages)/sizeof(uint32_t));
+    for (i = 0; i < MAX_DECIMATIONS; i++) {
+        ifcdevice->decimations[i] = 1;
+        ifcdevice->averages[i] = 1;
+    }
 
     memcpy(ifcdevice->decimations,  decimations,  sizeof(decimations));
     memcpy(ifcdevice->averages,     averages,     sizeof(averages));
