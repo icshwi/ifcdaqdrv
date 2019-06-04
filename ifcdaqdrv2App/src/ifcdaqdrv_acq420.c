@@ -73,6 +73,7 @@ ifcdaqdrv_status acq420_register(struct ifcdaqdrv_dev *ifcdevice){
     }
     ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size;
     ifcdevice->smem_size = 256 * 1024 * 1024;
+    ifcdevice->smem_sg_dma = 0;
 
     // Figure out the resolution and max frequency based on part number.
     // part_num typically looks like:

@@ -118,6 +118,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
     }
     ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
     ifcdevice->smem_size = 4 * 1024 * 1024;
+    ifcdevice->smem_sg_dma = 0;
 
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */

@@ -134,8 +134,8 @@ struct ifcdaqdrv_dev {
 
     struct tsc_ioctl_kbuf_req    *sram_dma_buf;                /**< Buffer for SRAM DMA transfers */
     struct tsc_ioctl_kbuf_req    *smem_dma_buf;                /**< Buffer for SMEM DMA transfers */
-    void                    *all_ch_buf;                  		/**< Buffer to store raw SMEM data */
-    void 					*sram_blk_buf;					/* Buffer to store raw SRAM data */
+    void                         *all_ch_buf;                  /**< Buffer to store raw SMEM data */
+    void                         *sram_blk_buf;                /* Buffer to store raw SRAM data */
 
     uint32_t                 sample_size;                  /**< Sample size in bytes, TODO: Function pointer instead? */
     uint32_t                 nchannels;                    /**< Number of channels */
@@ -155,6 +155,7 @@ struct ifcdaqdrv_dev {
 
     uint32_t sram_size;                                    /**< Size of SRAM per channel in bytes  */
     uint32_t smem_size;                                    /**< Size of shared RAM in bytes (512/2 MB in IFC1210). */
+    uint32_t smem_sg_dma;                                  /**< Set to use scatter gather DMA transfer */
 
     pthread_mutex_t lock;                                  /**< Lock that serializes access to the device. */
     pthread_mutex_t sub_lock;                              /**< Lock that serializes access to part of the device. */

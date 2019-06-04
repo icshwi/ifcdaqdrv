@@ -144,9 +144,12 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
     }
 
     if(ifcdevice->smem_dma_buf) {
-        //pevx_buf_free(ifcdevice->card, ifcdevice->smem_dma_buf);
-        tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
-        tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
+        if (ifcdevice->smem_sg_dma)
+            free(ifcdevice->smem_dma_buf->u_base);
+        else {
+            tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
+            tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
+        }
         free(ifcdevice->smem_dma_buf);
         ifcdevice->smem_dma_buf = NULL;
     }
@@ -190,8 +193,8 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     LOG((5, "Trying to mmap %dkiB in kernel for SRAM acquisition with tsc_kbuf_mmap()\n", ifcdevice->sram_dma_buf->size / 1024));
     if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->sram_dma_buf) < 0)  {
-        //goto err_mmap_sram;
         fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->sram_dma_buf) failed\n");
+        goto err_mmap_sram;
     }
 
     ifcdevice->smem_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -200,36 +203,50 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         goto err_smem_ctl;
     }
 
-    // Try to allocate as large dma memory as possible
-    ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
-    do {
-        LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
-        ret = tsc_kbuf_alloc(ifcdevice->node, ifcdevice->smem_dma_buf);
-    } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
-
-    if(ret) {
-        fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
-        goto err_smem_buf;
+    if (ifcdevice->smem_sg_dma) {
+        if (ifcdevice->smem_size > TSC_MAX_DMA_LEN)
+            ifcdevice->smem_size = TSC_MAX_DMA_LEN;
+        ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
+        LOG((5, "Trying to allocate %dMiB in userspace for scatter gather SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
+        ifcdevice->smem_dma_buf->u_base = aligned_alloc(sysconf(_SC_PAGESIZE), ifcdevice->smem_dma_buf->size);
+        if(!ifcdevice->smem_dma_buf->u_base) {
+            fprintf(stderr, "ERROR: aligned_alloc() failed\n");
+            goto err_smem_buf;
+        }
     }
+    else {
+        // Try to allocate as large dma memory as possible
+        ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
+        do {
+            LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
+            ret = tsc_kbuf_alloc(ifcdevice->node, ifcdevice->smem_dma_buf);
+        } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
-    LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
-    if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->smem_dma_buf) < 0)  {
-        //goto err_mmap_smem;
-        fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+        if(ret) {
+            fprintf(stderr, "ERROR: tsc_kbuf_alloc() failed\n");
+            goto err_smem_buf;
+        }
+
+        LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
+        if (tsc_kbuf_mmap(ifcdevice->node, ifcdevice->smem_dma_buf) < 0)  {
+            fprintf(stderr, "ERROR: tsc_kbuf_mmap(ifcdevice->smem_dma_buf) failed\n");
+            tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
+            goto err_smem_buf;
+        }
     }
 
     LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
     if(!ifcdevice->all_ch_buf){
         fprintf(stderr, "calloc(ifcdevice->smem_size, 1) failed\n");
-        goto err_smem_user_buf;
+        goto err_all_ch_buf;
     }
 
     LOG((5, "Trying to allocate 1 MiB in userspace for tsc_read_blk() calls\n"));
     ifcdevice->sram_blk_buf = calloc(1024*1024, 1);
     if(!ifcdevice->sram_blk_buf){
         fprintf(stderr, "calloc for the sram_blk_buf() failed\n");
-        goto err_mmap_sram;
+        goto err_sram_blk_buf;
     }
 
 
@@ -257,20 +274,25 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
 
     return status_success;
 
- err_mmap_sram:
+err_sram_blk_buf:
     free(ifcdevice->all_ch_buf);
 
-err_smem_user_buf:
-    tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
- 
+err_all_ch_buf:
+    if (ifcdevice->smem_sg_dma)
+        free(ifcdevice->smem_dma_buf->u_base);
+    else {
+        tsc_kbuf_munmap(ifcdevice->smem_dma_buf);
+        tsc_kbuf_free(ifcdevice->node, ifcdevice->smem_dma_buf);
+    }
+
 err_smem_buf:
     free(ifcdevice->smem_dma_buf);
 
 err_smem_ctl:
-    tsc_kbuf_free(ifcdevice->node, ifcdevice->sram_dma_buf);
+    tsc_kbuf_munmap(ifcdevice->sram_dma_buf);
 
-// err_mmap_sram:
-//     tsc_kbuf_munmap(ifcdevice->sram_dma_buf);    
+err_mmap_sram:
+    tsc_kbuf_free(ifcdevice->node, ifcdevice->sram_dma_buf);
 
 err_sram_buf:
     free(ifcdevice->sram_dma_buf);
@@ -305,6 +327,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     int status;
     uint32_t valid_dma_status;
     struct tsc_ioctl_dma_sts dma_sts;
+    struct tsc_ioctl_dma_mode dma_mode;
 
     /* Assuming that we are using channel ZERO */
     
@@ -339,6 +362,12 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
     dma_req.start_mode = DMA_START_CHAN(0);
     dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = 0;
+
+    if (ifcdevice->smem_sg_dma) {
+        dma_mode.mode = DMA_MODE_SET | DMA_MODE_SG;
+        dma_mode.chan = 0;
+        tsc_dma_mode(ifcdevice->node, &dma_mode);
+    }
 
     status = tsc_dma_alloc(ifcdevice->node, 0);
     if (status) 
@@ -525,7 +554,10 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 
     /* TODO: check usage of base address of the buffer. Tosca doesn't use pointer */
     //if (!dma_buf || !dma_buf->b_addr) {
-    if (!dma_buf || !dma_buf->b_base) {
+    if (!ifcdevice->smem_sg_dma && (!dma_buf || !dma_buf->b_base)) {
+        return status_internal;
+    }
+    else if (ifcdevice->smem_sg_dma && (!dma_buf || !dma_buf->u_base)) {
         return status_internal;
     }
 
@@ -555,7 +587,7 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 					     (dma_addr_t) src_addr, 
 					     DMA_SPACE_SHM, 
 					     DMA_PCIE_RR2,
-					     dma_buf->b_base, 
+					     ifcdevice->smem_sg_dma ? (uint64_t)dma_buf->u_base : dma_buf->b_base,
 					     ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE | DMA_SPACE_WS : DMA_SPACE_PCIE1 | DMA_SPACE_WS,
 					     DMA_PCIE_RR2,
 					     current_size | DMA_SIZE_PKT_1K
