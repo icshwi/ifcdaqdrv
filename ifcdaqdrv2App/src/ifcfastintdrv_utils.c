@@ -299,7 +299,7 @@ ifcdaqdrv_status ifcfastintdrv_register(struct ifcdaqdrv_dev *ifcdevice){
 
     ifcdevice->init_adc = ifcfastintdrv_init_adc;
     ifcdevice->nchannels = 16; //20 is not working !!!
-    ifcdevice->smem_size = 256<<20; //256 MB
+    ifcdevice->smem_size = 4*1024*1024; //4 MB
     ifcdevice->vref_max = 10.24;
     ifcdevice->sample_resolution = 16;
     ifcdevice->sample_size = 2; // Important for endianess
@@ -491,6 +491,7 @@ ifcdaqdrv_status ifcfastintdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         free(ifcdevice->smem_dma_buf);
         return status_internal;
     }
+   
 
     /* Map kernel space in userspace */
     LOG((5, "Trying to mmap %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));

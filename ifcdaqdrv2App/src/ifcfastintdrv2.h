@@ -247,7 +247,8 @@ ifcdaqdrv_status ifcfastint_get_pp_out(struct ifcdaqdrv_usr *ifcuser,
 ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser,
                                          size_t count,
                                          void *data,
-                                         size_t *nelm);
+                                         size_t *nelm,
+                                         double  *wrpointer);
 
 /**
  * @brief Reset the FSM.

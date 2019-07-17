@@ -36,7 +36,7 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     /* Setup the size of the ring buffer */
     
     intptr_t buf_start = 0x00000000;
-    intptr_t buf_end   = 0x0ff00000; //max allowed = 255 MB
+    intptr_t buf_end   = 0xF<<20;//0x0ff00000; //max allowed = 255 MB
 
     i32_reg_val = buf_end + (buf_start >> 16);
 
@@ -208,9 +208,9 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     /* buffer boundaries are FORCED to 0x0000 ---> 0x80000                     */
     /**************************************************************************/
 
-    buf_start = 0; // First history slot is special
-    buf_end = 0x80000;
-    buf_size = buf_end - buf_start;
+    //buf_start = 0; // First history slot is special
+    //buf_end = 0x80000;
+    //buf_size = buf_end - buf_start;
 
     intptr_t content_start;
     intptr_t content_end;
@@ -256,7 +256,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm) {
+ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm, double *wrpointer) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t i32_reg_val;
@@ -301,20 +301,29 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     content_start = (uint32_t) i32_reg_val;
 
-    // Store write pointer in `content_end`
-    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status;
-    }
+    /* IFDEF to select from where to read the ring buffer: randomly or from the latched write pointer */
 
+
+#if 1 
     //Now the write pointer is triggered by timing
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
-    INFOLOG(("Write pointer is at 0x%08x\n", (uint32_t) i32_reg_val));
+
+    /* THIS IS TO BE EXPOSED BY EPICS !!! */
+    *wrpointer = (double) i32_reg_val;
+#endif
+
+#if 0 // randomly
+    // Store write pointer in `content_end`
+    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
+    if(status) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status;
+    }
+#endif
 
     /*
      * Never read out the last item, it will make hardware think it overflowed.
@@ -325,6 +334,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     if(content_end < buf_start) {
             content_end += buf_size;
     }
+
 
     if(content_end < buf_start || content_start < buf_start) {
         //LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
@@ -394,8 +404,6 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
-    int32_t i32_reg_val;
-    size_t size;
 
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
@@ -409,14 +417,14 @@ ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, voi
     pthread_mutex_lock(&ifcdevice->lock);
 
     // Read 400 kB, from 0x101200 to 0x101600
-    ifcfastintdrv_read_sram_measurements(
+    status = ifcfastintdrv_read_sram_measurements(
             ifcdevice,
             data,
             IFCFASTINT_SRAM_PP_MEASURE
     );
    
     pthread_mutex_unlock(&ifcdevice->lock);
-    return status_success;
+    return status;
 }
 
 
