@@ -47,12 +47,15 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         } else if (strcmp(p, "ADC3117") == 0) {
             INFOLOG(("Identified ADC3117 on FMC %d\n", ifcdevice->fmc));
             adc3117_register(ifcdevice);
+            adc3117_scopelite_test(ifcdevice);
         } else if (strcmp(p, "DIO3118") == 0) {
             INFOLOG(("Identified DIO3118 on FMC %d\n", ifcdevice->fmc));
             dio3118_register(ifcdevice);
         }else {
-            LOG((LEVEL_ERROR, "No recognized device %s\n", p));
+            LOG((LEVEL_ERROR, "No recognized device %s - but will force ADC3117\n", p));
             return status_incompatible;
+            // adc3117_register(ifcdevice);
+            // adc3117_scopelite_test(ifcdevice);
         }
     } else {
         LOG((4, "Internal error, no product_name\n"));
@@ -181,251 +184,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
     return status;
 }
 
-#if 0
-ifcdaqdrv_status ifc_scope_arm(struct ifcdaqdrv_dev *ifcdevice){
-    // Function is never called
-    return -1;
-    int res = 0;
-
-    int fmc_acq_reg; // fmc data acquistion support register
-
-    fmc_acq_reg = ifcdevice->fmc == 1 ? 0x61 : 0x62;
-
-
-    ifc_xuser_tcsr_write(ifcdevice, fmc_acq_reg, 0x01010101); // ACQ_CLR = 1 clear data acquisition DPRAM
-    ifc_xuser_tcsr_write(ifcdevice, fmc_acq_reg, 0x00000000); // ACQ_CLR = 0
-
-    ifc_xuser_tcsr_write(ifcdevice, fmc_acq_reg, 0x0E0E0E0E); // Run data acquisition DPRAM One Shot ACQ_RUN = 1 ACQ_MODE = 11
-
-
-    uint32_t ACQ_HALT_MASK = 0x10101010;
-
-
-    // TODO timeout ...
-    // acquistion time depends on size and ADC clock ....
-
-    // slowest: 10MHz with 16Ksps ~ 2ms
-
-    int tmo = 100;   // 100 * 0.1ms = 10ms
-    while (--tmo) {
-        usleep(100); // wait 0.1ms
-
-        int32_t status = ifc_xuser_tcsr_read(crate, fmc_acq_reg);
-
-        // printf("fmc_acq_reg=%08x\n",status);
-
-        // check ACQ_HALT
-        if ((status & ACQ_HALT_MASK) == ACQ_HALT_MASK) {
-            break;
-        }
-    }
-
-
-
-    // check ACQ_HALT
-    if ((ifc_xuser_tcsr_read(crate, fmc_acq_reg) & ACQ_HALT_MASK) == ACQ_HALT_MASK) {
-        // ACQ_HALT = 1 -> acquisition stopped
-
-        if (DBG(DBG_LEVEL3)) {
-            printf("%s() acquisition done!\n", __FUNCTION__);
-        }
-    } else {
-        // ACQ_HALT = 0 -> acquisition not stopped
-
-        printf("Error: ifc_adc3110_ADS_acqdpram() acquisition timeout! (ACQ_HALT == 0) fmc_acq_reg=%08x\n",
-               ifc_xuser_tcsr_read(crate, fmc_acq_reg));
-
-        res = -1;
-    }
-
-    ifc_xuser_tcsr_write(crate, fmc_acq_reg, 0x00000000);   // clear ACQ_RUN bit's
-}
-
-return res;
-}
-#endif
-
-
-#if 0 // TODO
-ifcdaqdrv_status ifc_scope_vmeio_int(struct ifcdaqdrv_dev *ifcdevice, int enable, TRIGGERSLOPE slope, const
-                                     char *vmeiosource){
-    int res     = 0;
-    int fmc_reg = 0x69;
-
-
-    // set VME IO selector
-    uint32_t vme_io_selector = 0;
-
-    vmeioNameToSelector(vmeiosource, &vme_io_selector);
-
-    vme_io_selector &= 0x7F; // 7 bits
-
-    printf("%s: selector 0x%08x\n", __FUNCTION__, vme_io_selector);
-
-
-    // read INTA and INTB selector
-    int32_t regvalue = ifc_xuser_tcsr_read(ifcdevice, fmc_reg);
-
-
-    printf("%s: read 0x%08x\n", __FUNCTION__, regvalue);
-
-    int32_t mode = 0; // disabled
-
-    // VME_Px_INTx_Sel[6:0]
-    mode |= (vme_io_selector & 0x7F); // 7 bits
-
-    // VME_Px_INTx_POL [7]
-    if (slope == TSLOPE_POSITIVE) {
-        // set bit 7
-        mode |= (1 << 7);
-    }
-
-    // VME_Px_INTx_ENA
-    if (enable) {
-        // set bit 15
-        mode |= (1 << 15);
-    }
-
-
-    printf("%s: mode 0x%08x\n", __FUNCTION__, mode);
-
-
-    if (ifcdevice->fmc == 1) {
-        // set INTA selector
-        // bits [15:0]
-        regvalue &= 0xFFFF0000;
-        regvalue |= (mode & 0xFFFF);
-    } else {
-        // set INTB selector
-        // bits [31:16]
-        regvalue &= 0x0000FFFF;
-        regvalue |= ((mode & 0xFFFF) << 16);
-    }
-
-    printf("%s: write 0x%08x\n", __FUNCTION__, regvalue);
-
-    ifc_xuser_tcsr_write(ifcdevice, fmc_reg, regvalue);
-    return res;
-}
-#endif
-
-#if 0
-ifcdaqdrv_status ifc_scope_set_trigger(struct ifcdaqdrv_dev *ifcdevice, TRIGGERSOURCE source, TRIGGERSLOPE slope,
-                                       uint32_t level, const char *vmeiosource, int gpioGateEnable, int
-                                       gpioGateActiveHigh){
-    int res                 = 0;
-    uint32_t tmode          = 0;     /* Trigger bitmask */
-    uint32_t trig_level_ext = 0;     /* Bitmask for extended trigger for ACQ420 */
-    uint16_t ui16_reg_val;
-
-    int reg = IFC_SCOPE_TCSR_SRAMx_TRG_REG(ifcdevice->fmc);
-
-    if (DBG(DBG_LEVEL2)) {
-        printf("%s(source=%d,slope=%d,level=%u,gpioGateEnable=%d,gpioGateActiveHigh=%d)\n", __FUNCTION__, source, slope,
-               level, gpioGateEnable, gpioGateActiveHigh);
-    }
-
-
-    // set GPIO gate and gatePol
-    SETBIT(&tmode, 18, gpioGateEnable);
-    SETBIT(&tmode, 19, gpioGateActiveHigh);
-
-    switch (app) {
-    case SAPP_XUSER_SCOPE_DTACQ:
-        tmode |= (level >> 4) & IFC_SCOPE_TCSR_TRG_Trig_Level_MASK;
-        if (fmc == IFC_FMC1) {
-            trig_level_ext |= (level & 0xF) << 4;
-        } else {
-            trig_level_ext |= (level & 0xF) << 12;
-        }
-        break;
-    default:
-        tmode |= level & IFC_SCOPE_TCSR_TRG_Trig_Level_MASK;
-        break;
-    }
-    tmode |= (slope & IFC_SCOPE_TCSR_TRG_Trig_Polarity_MASK);
-
-    /*
-     * Setting the trigger source is done using three fields:
-     *   Trig_GPIO_Sel
-     *     00 -> Enable Trig_Source. Use ADC channel level as trigger source.
-     *     10 -> Use FMC trigger input as trigger source.
-     *     11 -> Use VME_P0/2 as trigger source.
-     *   Trig_GPIO_Gate (Use FMC trigger &(logical AND) ADC channel level trigger)
-     *     0  -> Disabled
-     *     1  -> Enabled
-     *   Trig_Source
-     *     Select ADC channel 0-7 (0-4) to trigger on.
-     */
-    switch (source) {
-    case TSOURCE_EXT_GPIO:
-        tmode |= (0x2 << 16);
-        break;
-    case TSOURCE_EXT_VMEIO:
-        // set source VMEIO
-        tmode |= (0x3 << 16);
-        // printf("EXT_VMEIO: A 0x%08x\n",tmode);
-        // set VME IO selector
-        uint32_t vme_io_selector = 0;
-        vmeioNameToSelector(vmeiosource, &vme_io_selector);
-        vme_io_selector &= 0x7F;         // 7 bits
-        // printf("EXT_VMEIO: selector 0x%08x\n",vme_io_selector);
-        tmode           |= (vme_io_selector << 20);
-        // printf("EXT_VMEIO: B 0x%08x\n",tmode);
-        if (DBG(DBG_LEVEL5)) {
-            printf("%s() set EXT-VME source selector=0x%02x!\n", __FUNCTION__, vme_io_selector);
-        }
-        break;
-    default:
-        // Shift in the channel number if triggering on channel
-        tmode |= source << 28;
-        break;
-    }
-
-    // Set trigger enable bit
-    tmode |= IFC_SCOPE_TCSR_TRG_Trig_Enable_MASK;
-
-    if (DBG(DBG_LEVEL3)) {
-        printf("%s() trigger_reg=0x%02x  tmode=0x%08x\n", __FUNCTION__, reg, tmode);
-    }
-
-    ifc_xuser_tcsr_setclr(ifcdevice, reg, tmode, 0xFFFFFFFF);
-
-    return res;
-}
-
-ifcdaqdrv_status ifc_scope_vmeio_init(struct ifcdaqdrv_dev *ifcdevice){
-    // enable SERDES (doc: XUSER_SCOPE_UG_A0 4.2.1 TCSR FPGA Interconnect SERDES Controller
-
-    int32_t serdes = 0;
-    ifc_xuser_tcsr_read(ifcdevice, 0x24, &serdes); // GPIO TCSR SERDES
-
-    if ((serdes & 0x02) == 0) {
-        // SERDES not enabled
-
-#if DEBUG
-        printf("%s: GPIO SERDES =  0x%08x\n", __FUNCTION__, serdes);
-        printf("%s: Enable IO SERDES..\n",    __FUNCTION__);
-#endif
-
-        serdes |= 0x3; // enable Serdes
-
-        ifc_xuser_tcsr_write(ifcdevice, 0x24, serdes);
-    }
-
-    // enable ME_P2 user's IO controlled by the AP_Specific block (SCOPE)
-    // set bit P2_APS_ENA to 0
-
-    // set VME_P2 A/C/D and Z to Input
-    ifc_xuser_tcsr_write(ifcdevice, 0x6, 0x00000000); // VME_P2_A_DIR all INPUT
-    ifc_xuser_tcsr_write(ifcdevice, 0x9, 0x00000000); // VME_P2_C_DIR all INPUT
-    ifc_xuser_tcsr_write(ifcdevice, 0xC, 0x00000000); // VME_P2_D_DIR all INPUT
-    ifc_xuser_tcsr_write(ifcdevice, 0xF, 0x00000000); // VME_P2_Z_DIR all INPUT and P2_APS_ENA=0
-
-    return 0;
-}
-#endif
-
 /* Returns last sample index written to in circular buffer. */
 ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address){
     int32_t i32_reg_val;
@@ -511,6 +269,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
         break;
     case ifcdaqdrv_acq_mode_smem:
         offset = 0;
+
+        printf("Entered ifcdaqdrv_scope_read_ai with case ifcdaqdrv_acq_mode_smem\n");
 
         ifcdaqdrv_start_tmeas();
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->nchannels * ifcdevice->sample_size);
@@ -610,10 +370,11 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
         if (ifcdevice->board_id == 0x3117) {
-            if (ifcdevice->fmc == 1) {
-                offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel << 12);
+            //if (ifcdevice->fmc == 1) {
+            if (channel < 2) {
+                offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel * 0x40000);
             } else {
-                offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel << 12);
+                offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel * 0x40000);
             }
         } else {
             offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
@@ -650,6 +411,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         }
 #endif
         offset = 0;
+
+        printf("Entered ifcdaqdrv_scope_read_ai_ch with case ifcdaqdrv_acq_mode_smem\n");
 
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->sample_size);
         if (status) {

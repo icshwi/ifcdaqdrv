@@ -18,8 +18,20 @@ extern "C" {
 #define IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE 0x12101201
 #define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
 #define IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE  0x73570001
-
 #define IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE    0x12361717
+
+/**
+ * @brief Constants to select backplane lines
+ */
+#define IFCDAQDRV_BACKPLANE_RX17    0x01
+#define IFCDAQDRV_BACKPLANE_RX18    0x02
+#define IFCDAQDRV_BACKPLANE_RX19    0x04
+#define IFCDAQDRV_BACKPLANE_RX20    0x08
+#define IFCDAQDRV_BACKPLANE_TX17    0x10
+#define IFCDAQDRV_BACKPLANE_TX18    0x20
+#define IFCDAQDRV_BACKPLANE_TX19    0x40
+#define IFCDAQDRV_BACKPLANE_TX20    0x80
+#define IFCDAQDRV_BACKPLANE_ALL     0xFF
 
 /**
  * @brief Enumeration of possible error codes.
@@ -603,15 +615,22 @@ ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t c
 
 ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser);
 
-/* ##################################################################################### */
-/*          TESING ENHANCED SCOPE Application       */
-/* ##################################################################################### */
 ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
 ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
 ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
 
 ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser);
 
+ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines);
+ifcdaqdrv_status ifcdaqdrv_disable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines);
+ifcdaqdrv_status ifcdaqdrv_read_backplane_trgcnt(struct ifcdaqdrv_usr *ifcuser, uint32_t *trig_cnt);
+ifcdaqdrv_status ifcdaqdrv_ack_acquisition(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_arm_scopelite(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_scopelite_trigger(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_read_acq_count(struct ifcdaqdrv_usr *ifcuser, uint32_t *acq_cnt);
+ifcdaqdrv_status ifcdaqdrv_read_scopestatus(struct ifcdaqdrv_usr *ifcuser, uint32_t *scopest);
+ifcdaqdrv_status ifcdaqdrv_read_acqdone(struct ifcdaqdrv_usr *ifcuser, uint32_t *acqdone);
+ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser);
 
 
 #ifdef __cplusplus

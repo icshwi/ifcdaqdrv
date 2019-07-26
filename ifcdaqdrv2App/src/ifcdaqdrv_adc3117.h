@@ -127,6 +127,7 @@ ifcdaqdrv_status adc3117_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, s
 ifcdaqdrv_status adc3117_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                        uint16_t *board_id);
 ifcdaqdrv_status adc3117_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max);
+ifcdaqdrv_status adc3117_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t nsamples_max);
 
 ifcdaqdrv_status adc3117_set_adc_channel(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel);
 ifcdaqdrv_status adc3117_get_adc_channel(struct ifcdaqdrv_dev *ifcdevice, uint32_t *channel);
@@ -145,4 +146,6 @@ ifcdaqdrv_status adc3117_get_sample_rate(struct ifcdaqdrv_dev *ifcdevice, double
 ifcdaqdrv_status adc3117_fmc_reinit(struct ifcdaqdrv_dev *ifcdevice);
 
 ifcdaqdrv_status adc3117_configuration_command(struct ifcdaqdrv_dev *ifcdevice);
+ifcdaqdrv_status adc3117_scopelite_test(struct ifcdaqdrv_dev *ifcdevice);
+
 #endif // _IFC_ADC3117_H_

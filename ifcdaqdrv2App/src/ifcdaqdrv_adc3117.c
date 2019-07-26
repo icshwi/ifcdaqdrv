@@ -37,6 +37,8 @@ static ifcdaqdrv_status adc3117_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcd
         printf("Invalid DPRAM buffer size!\n");
     }
 
+    *nsamples_max = 128 * 1024;
+
     return status;
 }
 
@@ -102,7 +104,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->configuration_command = adc3117_configuration_command;
 
-    ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
+    ifcdevice->mode        = ifcdaqdrv_acq_mode_smem;
     ifcdevice->sample_size = 2;
     ifcdevice->nchannels   = 20;
     ifcdevice->resolution  = 16;
@@ -123,7 +125,7 @@ ifcdaqdrv_status adc3117_register(struct ifcdaqdrv_dev *ifcdevice) {
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
-
+   
     return status;
 }
 
@@ -180,6 +182,9 @@ ifcdaqdrv_status adc3117_init_adc(struct ifcdaqdrv_dev *ifcdevice){
     status = adc3117_configuration_command(ifcdevice); // Send config
     if (status)
         return status;
+
+    printf("ADC3117 was correctly initiated!\n");
+    
 
     return status;
 }
@@ -572,4 +577,27 @@ ifcdaqdrv_status adc3117_fmc_reinit(struct ifcdaqdrv_dev *ifcdevice) {
 ifcdaqdrv_status adc3117_configuration_command(struct ifcdaqdrv_dev *ifcdevice) {
 
     return ifc_fmc_tcsr_setclr(ifcdevice, ADC3117_MCSR_REG, 0x1, 0x1);
+}
+
+
+ifcdaqdrv_status adc3117_scopelite_test(struct ifcdaqdrv_dev *ifcdevice) {
+    uint32_t nsamples_max = 0;
+    
+    ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
+    ifcdevice->sample_size = 2;
+    ifcdevice->nchannels   = 4;
+    ifcdevice->resolution  = 16;
+    ifcdevice->sample_resolution = 16;
+    ifcdevice->vref_max = 10.24;
+
+    ifcdevice->armed       = 0;
+    ifcdevice->poll_period = 10;
+
+    nsamples_max = (0x114000 - 0x100000) / 2;
+
+    ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
+    ifcdevice->smem_size = 4 * 1024 * 1024;
+    ifcdevice->smem_sg_dma = 0;
+
+    return status_success;
 }

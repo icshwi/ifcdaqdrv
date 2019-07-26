@@ -202,6 +202,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
                 goto err_read;
             }
         }
+        INFOLOG(("Initiated SCOPE firmware\n"));
         break;
     case IFC1210FASTINT_APP_SIGNATURE:
         status = ifcfastintdrv_register(ifcdevice);
@@ -223,6 +224,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         break;       
 
     default:
+        INFOLOG(("No application was selected\n"));
         break;
     }
 
@@ -361,6 +363,9 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
         }
     }
 
+
+/* This code is disabled because ACQ_CLKERR remains HIGH before the first arming procedure, but the acquisition is OK */
+#if 0
     /* if the "for" didn't break, then ACQ_CLKERR is still HIGH, which means that clock is not locked */
     if (i == 5)
     {
@@ -368,6 +373,7 @@ ifcdaqdrv_status ifcdaqdrv_arm_device(struct ifcdaqdrv_usr *ifcuser){
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_unknown;
     }
+#endif
 
     /* Arm device */
     if (ifcdevice->board_id == 0x3117) {
@@ -946,6 +952,13 @@ ifcdaqdrv_status ifcdaqdrv_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_
 
     if (ifcdevice->set_trigger_threshold) {
         status = ifcdevice->set_trigger_threshold(ifcdevice, threshold);
+    }
+
+    /* Backplane trigger enabling - MLVDS lines */
+    if (ifcdevice->trigger_type == ifcdaqdrv_trigger_backplane) {
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT, 0);
+    } else {
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 0, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT);
     }
 
 #if DEBUG
@@ -2000,11 +2013,6 @@ ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser)
     return status;
 }
 
-
-/* ##################################################################################### */
-/*          TESING ENHANCED SCOPE Application       */
-/* ##################################################################################### */
-
 ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
 {
     ifcdaqdrv_status      status;
@@ -2073,8 +2081,6 @@ ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irq
     return status;
 }
 
-
-
 /*
 * Based on TscMon scripts provided by IOxOS - most basic configuration of the firmware
 */
@@ -2116,5 +2122,198 @@ ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser)
     ifc_xuser_tcsr_setclr(ifcdevice, 0x6b, 0x1<<23, 0);         // use GPIO (backplane) as trigger
 
     pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    backplane_lines = backplane_lines & 0xff;
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, backplane_lines, 0x00);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_disable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    backplane_lines = backplane_lines & 0xff;
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, backplane_lines);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_read_backplane_trgcnt(struct ifcdaqdrv_usr *ifcuser, uint32_t *trig_cnt) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int32_t i32_reg_val;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
+    *trig_cnt = (uint32_t) (i32_reg_val >> 16) & 0x0f;
+
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_read_acq_count(struct ifcdaqdrv_usr *ifcuser, uint32_t *acq_cnt) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int32_t i32_reg_val;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+
+    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
+    *acq_cnt = (uint32_t) (i32_reg_val >> 8) & 0x0f;
+
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_ack_acquisition(struct ifcdaqdrv_usr *ifcuser) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x110FF, 0x00);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_arm_scopelite(struct ifcdaqdrv_usr *ifcuser) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_REG_69, 1<<1, 0x00);
+    ifcdevice->armed = 1;
+
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_scopelite_trigger(struct ifcdaqdrv_usr *ifcuser) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_read_scopestatus(struct ifcdaqdrv_usr *ifcuser, uint32_t *scopest) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int32_t i32_reg_val;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    status = ifc_xuser_tcsr_read(ifcdevice, 0x66, &i32_reg_val);
+    *scopest = (uint32_t) (i32_reg_val >> 12) & 0x0f;
+
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_read_acqdone(struct ifcdaqdrv_usr *ifcuser, uint32_t *acqdone) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int32_t i32_reg_val;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    status = ifc_xuser_tcsr_read(ifcdevice, 0x69, &i32_reg_val);
+    *acqdone = (uint32_t) (i32_reg_val >> 7) & 0x01;
+
+    return status;
+}
+
+
+ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser) {
+    ifcdaqdrv_status      status;
+    int32_t               i32_reg_val;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    do {
+        status = ifc_scope_tcsr_read(ifcdevice, ADC3117_SBUF_CONTROL_STATUS_REG, &i32_reg_val);
+        usleep(ifcdevice->poll_period);
+    } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00000080) != 0x00000080));
+
+    if (!ifcdevice->armed) {
+        return status_cancel;
+    }
+
+    ifcdaqdrv_ack_acquisition(ifcuser);
+    ifcdaqdrv_disarm_device(ifcuser);
     return status;
 }

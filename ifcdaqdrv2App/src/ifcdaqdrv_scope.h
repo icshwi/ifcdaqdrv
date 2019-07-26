@@ -105,6 +105,15 @@
 #define IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET   	0x00200000
 #define IFC_SCOPE_SMEM_FMC2_SAMPLES_OFFSET   		0x10000000
 
+#define IFC_SCOPE_MLVDS_CONTROL_REG					0x09
+#define IFC_SCOPE_MLVDS_ENABLE_SHIFT				31
+
+#define IFC_SCOPE_BACKPLANE_MASK_REG				0x66
+#define IFC_SCOPE_BACKPLANE_TRIGCNT_REG				0x67
+#define IFC_SCOPE_REG_69							0x69
+
+
+
 // The following option enables rearranging of pretrigger circular buffer.
 #ifndef PRETRIG_ORGANIZE
 #define PRETRIG_ORGANIZE 1

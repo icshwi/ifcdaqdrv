@@ -369,6 +369,10 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
         tsc_dma_mode(ifcdevice->node, &dma_mode);
     }
 
+    printf("------- \n Preparing DMA operation \n");
+    printf("Source Address = 0x%08x\n", (uint32_t) src_addr);
+    printf("Destin Address = 0x%08x\n", (uint32_t) des_addr);
+
     status = tsc_dma_alloc(ifcdevice->node, 0);
     if (status) 
     {
