@@ -35,8 +35,8 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Setup the size of the ring buffer */
     
-    intptr_t buf_start = 0x00000000;
-    intptr_t buf_end   = 0xF<<20;//0x0ff00000; //max allowed = 255 MB
+    intptr_t buf_start = 0x00000001;
+    intptr_t buf_end   = 0x1F<<20;//0x0ff00000; //max allowed = 255 MB
 
     i32_reg_val = buf_end + (buf_start >> 16);
 
@@ -91,7 +91,7 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* TESTING: enable bit 0 of the timing input mask (register 6C) */
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0x00);
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x00, 0x0f);
     if(status) {
 	pthread_mutex_unlock(&ifcdevice->lock);
 	return status_internal;
@@ -301,10 +301,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     content_start = (uint32_t) i32_reg_val;
 
-    /* IFDEF to select from where to read the ring buffer: randomly or from the latched write pointer */
-
-
-#if 1 
+#if 1 // This code is here to debug the integration with MRF EVRs
     //Now the write pointer is triggered by timing
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
     if(status) {
@@ -316,14 +313,13 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     *wrpointer = (double) i32_reg_val;
 #endif
 
-#if 0 // randomly
+    // randomly
     // Store write pointer in `content_end`
     status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status;
     }
-#endif
 
     /*
      * Never read out the last item, it will make hardware think it overflowed.
