@@ -35,10 +35,10 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Setup the size of the ring buffer */
     
-    intptr_t buf_start = 0x00000001;
+    intptr_t buf_start = 5; // buf_start in MBytes granularity
     intptr_t buf_end   = 0x1F<<20;//0x0ff00000; //max allowed = 255 MB
 
-    i32_reg_val = buf_end + (buf_start >> 16);
+    i32_reg_val = buf_end + (buf_start << 4);
 
     /* if running on BIG endian machine, enable the firmware option to record the history buffer
 	 * as big endian. It will then swap the 64 bytes frame on a 4 byte basis, causing the 16-bit
@@ -91,7 +91,7 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     }
 
     /* TESTING: enable bit 0 of the timing input mask (register 6C) */
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x00, 0x0f);
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0xfe);
     if(status) {
 	pthread_mutex_unlock(&ifcdevice->lock);
 	return status_internal;
@@ -288,6 +288,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 
     buf_start = (((uint32_t)i32_reg_val & 0x0FF0) << 16); // MBytes granularity
     buf_end = ((uint32_t)i32_reg_val & 0x0FF00000); // This points to first item *after* the buffer
+    buf_end -= 0x80000;
     buf_size = buf_end - buf_start;
 
     uint32_t content_start;
@@ -309,18 +310,23 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
         return status;
     }
 
+    i32_reg_val &= 0x0FFFFFE0;
+
     /* THIS IS TO BE EXPOSED BY EPICS !!! */
     *wrpointer = (double) i32_reg_val;
 #endif
 
-    // randomly
-    // Store write pointer in `content_end`
-    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status;
+    if ((i32_reg_val < buf_start) || (i32_reg_val > buf_end))
+    {
+        // randomly
+        // Store write pointer in `content_end`
+        INFOLOG((" Write pointer OUTSIDE THE RING BUFFER !!!!!\n\n"));
+        status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status;
+        }
     }
-
     /*
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
@@ -331,6 +337,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
             content_end += buf_size;
     }
 
+    
 
     if(content_end < buf_start || content_start < buf_start) {
         //LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
