@@ -19,6 +19,8 @@ extern "C" {
 #define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
 #define IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE  0x73570001
 
+#define IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE    0x12361717
+
 /**
  * @brief Enumeration of possible error codes.
  */
@@ -600,6 +602,17 @@ ifcdaqdrv_status ifcdaqdrv_set_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t c
 ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t *value);
 
 ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser);
+
+/* ##################################################################################### */
+/*          TESING ENHANCED SCOPE Application       */
+/* ##################################################################################### */
+ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
+ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
+ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
+
+ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser);
+
+
 
 #ifdef __cplusplus
 }

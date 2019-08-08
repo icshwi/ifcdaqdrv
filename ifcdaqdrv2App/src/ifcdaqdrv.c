@@ -20,6 +20,7 @@
 #include "ifcdaqdrv_adc3117.h"
 #include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
+#include "ifcdaqdrv_enhanced_scope.h"
 
 #define IFC1410_FMC_EN_DATA   0xC0000000
 #define IFC1410_FMC_EN_OFFSET 0x000C
@@ -125,6 +126,9 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         INFOLOG(("Fast Interlock Application\n"));
         /* Recognized fast interlock implementation */
         break;
+    case IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE:
+        INFOLOG(("Enhanced Scope DAQ Application\n"));
+        break;
     default:
         INFOLOG(("Firmware application not supported\n"));
         // Skip all signature verification for now...
@@ -209,6 +213,15 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
             goto err_read;
         }
         break;
+    case IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE:
+        INFOLOG(("Registering ENHANCED SCOPE APPLICATION!\n"));
+        status = enhanced_scope_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+        INFOLOG(("Successful init of ENHANCED SCOPE!\n"));
+        break;       
+
     default:
         break;
     }
@@ -1988,3 +2001,120 @@ ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser)
 }
 
 
+/* ##################################################################################### */
+/*          TESING ENHANCED SCOPE Application       */
+/* ##################################################################################### */
+
+ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    struct tsc_ioctl_user_irq tscirq;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    tscirq.irq  = irqn;
+    tscirq.mask = 1 <<irqn;
+    tscirq.wait_mode = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4);
+
+    status = tsc_user_irq_subscribe(ifcdevice->node, &tscirq);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    struct tsc_ioctl_user_irq tscirq;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    tscirq.irq  = irqn;
+    tscirq.mask = 1 <<irqn;
+    tscirq.wait_mode = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4);
+
+    status = tsc_user_irq_unsubscribe(ifcdevice->node, &tscirq);
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
+
+
+ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    struct tsc_ioctl_user_irq tscirq;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    tscirq.irq  = irqn;
+    tscirq.mask = 1 <<irqn;
+    tscirq.wait_mode = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4);
+
+    status = tsc_user_irq_wait(ifcdevice->node, &tscirq);    
+
+    return status;
+}
+
+
+
+/*
+* Based on TscMon scripts provided by IOxOS - most basic configuration of the firmware
+*/
+ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser) 
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    int rgbuf_index;
+    int32_t i32_reg_val;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    INFOLOG(("Preparing RG_BUFs \n"));
+
+    for (rgbuf_index = 0; rgbuf_index < 8; rgbuf_index++) {
+        /* Select RBUF, size = 252*64k, reset buffer and enable SMEM Direct */
+        ifc_xuser_tcsr_write(ifcdevice, 0x70, (0xe0fc0000 + rgbuf_index));
+        usleep(10000);
+        /* Set RG base address */
+        i32_reg_val = (((0x100*rgbuf_index)+0x1001) << 16) | ((0x100*rgbuf_index)+0x1801);
+        ifc_xuser_tcsr_write(ifcdevice, 0x71, i32_reg_val);
+    }
+
+    /* Setting up register 0x69 - FrontEnd control status */
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x69, 0xf, 0x00);      // active channels 0-7 enabled
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x69, 0x0, 0x7<<24);   // No down-sampling
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x69, 0x7<<28, 0x00);  // De multiplx function
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x69, 1<<31, 0x00);    // front-end enabled
+
+
+    /* Setting up TRIGGER register */
+    ifc_xuser_tcsr_write(ifcdevice, 0x6b, 0x00); // Clean register
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x6b, 0x4<<16, 0x7f<<16);  // select RX17 as backplane trigger
+    ifc_xuser_tcsr_setclr(ifcdevice, 0x6b, 0x1<<23, 0);         // use GPIO (backplane) as trigger
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
