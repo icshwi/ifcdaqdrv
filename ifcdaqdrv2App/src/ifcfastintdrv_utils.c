@@ -632,15 +632,14 @@ ifcdaqdrv_status ifcfastintdrv_read_sram_measurements( struct ifcdaqdrv_dev *ifc
                                                         void *dest_buffer, 
                                                         uint32_t sram_addr) 
 {
-    //return status_success;
-
+#if 0 // MEAS_WITH_DMA
     ifcdaqdrv_status status;
     struct tsc_ioctl_dma_req dma_req = {0};
     struct tsc_ioctl_kbuf_req *dma_buf;
 
     /* Allocate a new kbuf handler structure */
     dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
-    dma_buf->size = 4*(0x400); //sizeof(*pp_options);  
+    dma_buf->size = 0x400; 
 
     /* Try to allocate kernel buffer */
     status = ifcfastintdrv_alloc_tscbuf(ifcdevice, dma_buf);
@@ -721,6 +720,36 @@ dmaerr:
     tsc_kbuf_free(ifcdevice->node, dma_buf);
     free(dma_buf);
     return status;
+#else
+    ifcdaqdrv_status status;
+    int cmdword = RDWR_MODE_SET( 0x44, RDWR_SPACE_USR1, 0);
+    void *mybuffer = calloc(0x400,1);
+
+    if (!ifcdaqdrv_is_byte_order_ppc()) {
+        cmdword = tsc_swap_32(cmdword);
+    }
+
+    ulong src_addr = (ulong) sram_addr;
+
+    usleep(100);
+    status = tsc_read_blk(ifcdevice->node, src_addr, (char*) mybuffer, 0x400, cmdword);
+
+    if (status) {
+        LOG((LEVEL_ERROR,"tsc_blk_read() returned %d\n", status));
+        free(mybuffer);
+        return status;
+    }
+
+    memcpy(dest_buffer, mybuffer, 0x400);
+
+    // if (ifcdaqdrv_is_byte_order_ppc()) {
+    //     ifcdaqdrv_swap64(rt_status);
+    // }
+    free(mybuffer);
+
+    return status_success;   
+
+#endif
 }
 
 
