@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <linux/types.h>
 
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcfastintdrv2.h"
 
 

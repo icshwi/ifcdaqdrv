@@ -1,5 +1,5 @@
-#ifndef _IFC1210SCOPEDRV_H_
-#define _IFC1210SCOPEDRV_H_ 1
+#ifndef _IFCDAQDRV_H_
+#define _IFCDAQDRV_H_ 1
 
 /* Types from the following libraries are used */
 #include <stddef.h>
@@ -472,7 +472,7 @@ ifcdaqdrv_status ifcdaqdrv_get_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
  * @param[in] npretrig The number of pre-trigger samples.
  */
 
-ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_usr *ifcuser, uint32_t ptq);
 
 /**
  * @brief Get number of pre-trigger samples.
@@ -481,7 +481,7 @@ ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
  * @param[out] npretrig The number of pre-trigger samples.
  */
 
-ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t *npretrig);
+ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_usr *ifcuser, uint32_t *ptq);
 
 /**
  * @brief Set gain per channel. Supported gain varies between FMCs.
@@ -648,6 +648,10 @@ ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int funct
 #define SCOPE4CH_READ_ACQ_COUNT             (SCOPE4CH_FUNCTION_OFFSET+6)
 #define SCOPE4CH_READ_SCOPE_STATUS          (SCOPE4CH_FUNCTION_OFFSET+7)
 #define SCOPE4CH_READ_ACQ_DONE              (SCOPE4CH_FUNCTION_OFFSET+8)
+
+//Remove some day
+ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t *npretrig);
 
 #ifdef __cplusplus
 }

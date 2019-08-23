@@ -6,7 +6,7 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include <ifcdaqdrv2.h>
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_dio3118.h"
 
 #include "debug.h"

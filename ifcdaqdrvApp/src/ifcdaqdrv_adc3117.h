@@ -1,9 +1,7 @@
-#ifndef _IFC_ADC3117_H_
-#define _IFC_ADC3117_H_ 1
+#ifndef _IFCDAQDRV_ADC3117_H_
+#define _IFCDAQDRV_ADC3117_H_ 1
 
-#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_fmc.h"
 
 #define ADC3117_SIGN_REG                0x0
 #define ADC3117_MCSR_REG                0x1
@@ -17,18 +15,6 @@
 #define ADC3117_CHANNEL_SELECT_REG      0x9
 #define ADC3117_CHANNEL_CONFIG_REG      0xA
 #define ADC3117_DISC_STATUS_REG         0xB
-
-#define ADC3117_APP_SIGN_REG            0x0
-#define ADC3117_ACQ_CHANNEL_SEL_REG     0x1
-#define ADC3117_ACQ_CONTROL_STATUS_REG  0x2
-#define ADC3117_ACQ_STATUS_1_REG        0x3
-#define ADC3117_ACQ_STATUS_2_REG        0x4
-#define ADC3117_FMC_STATUS_REG          0x5
-#define ADC3117_SBUF_SELECT_REG         0x8
-#define ADC3117_SBUF_CONTROL_STATUS_REG 0x9
-#define ADC3117_SBUF_STATUS_1_REG       0xA
-#define ADC3117_SBUF_STATUS_2_REG       0xB
-
 
 #define ADC3117_SIGNATURELEN 8
 
@@ -121,8 +107,6 @@ ifcdaqdrv_status adc3117_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3117
                                                  uint32_t *value);
 ifcdaqdrv_status adc3117_set_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t threshold);
 ifcdaqdrv_status adc3117_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t *threshold);
-
-ifcdaqdrv_status adc3117_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struct fmc_fru_id *fru_id);
 
 ifcdaqdrv_status adc3117_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                        uint16_t *board_id);

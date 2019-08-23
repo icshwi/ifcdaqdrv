@@ -1,6 +1,10 @@
-#ifndef _IFC_SCOPE_H_
-#define _IFC_SCOPE_H_ 1
+#ifndef _IFCDAQDRV_SCOPE_H_
+#define _IFCDAQDRV_SCOPE_H_ 1
 
+#define IFC1210SCOPEDRV_SCOPE_SIGNATURE       0x12110301
+#define IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE   0x12100501
+
+#define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
 
 /*
  * The SCOPE TCSR has two registers, 0x70 and 0x74, for control & status of SRAM1/2 which are used by FMC1/2 specific
@@ -9,23 +13,17 @@
  *
  * Then there are two more duplicates of all these registers to control SMEM.
  *
- * Since the d-tAcq ACQ420 can have a 20 bit digitizer and the trigger level field only is 16 bit, there is an extended
- * field with the 4 least significant bits at 0x73. 0x73 and 0x77 are N/A on the original SCOPE.
- *
  *   XUSER_SCOPE_UG       chapter 5.3.8
  *   XUSER_FASTSCOPE_UG   chapter 5.4.9
- *   XUSER_SCOPE_DTACQ_UG chapter 5.1.5
  */
 
+#define IFC_SCOPE_TCSR_APP_SIGN_REG             0
+#define IFC_SCOPE_TCSR_APP_INT_STATUS_REG       8
 
-#define IFC_SCOPE_TCSR_CS_REG   0
-#define IFC_SCOPE_TCSR_TRIG_REG 1
-#define IFC_SCOPE_TCSR_LA_REG   2
-
-/* DTACQ FMC1/2 General control */
-#define IFC_SCOPE_DTACQ_TCSR_GC            0x03
-/* DTACQ Trigger Level Extended */
-#define IFC_SCOPE_DTACQ_TCSR_TRGLEVEXT_REG 0x73
+#define IFC_SCOPE_ACQ_TCSR_CS_REG               0
+#define IFC_SCOPE_ACQ_TCSR_TRIG_REG             1
+#define IFC_SCOPE_ACQ_TCSR_LA_REG               2
+#define IFC_SCOPE_ACQ_TCSR_SMEM_BASE_SIZE_REG   3
 
 #define IFC_SCOPE_TCSR_CS_ACQ_Single_MASK            0x00000001
 #define IFC_SCOPE_TCSR_CS_ACQ_Auto_MASK              0x00000002
@@ -92,17 +90,7 @@
 #define IFC_SCOPE_TCSR_TRGLEVEXT_SMEM1_SHIFT         20
 #define IFC_SCOPE_TCSR_TRGLEVEXT_SMEM2_SHIFT         28
 
-#define IFC_SCOPE_DTACQ_TCSR_GC_ACQRUN_MASK          0x01
-#define IFC_SCOPE_DTACQ_TCSR_GC_ACQFIFO_MASK         0x02
-#define IFC_SCOPE_DTACQ_TCSR_GC_ACTSEL_MASK          0x0c
-
-#define IFC_SCOPE_DTACQ_TCSR_GC_FMC1_ACQRUN_SHIFT    0
-#define IFC_SCOPE_DTACQ_TCSR_GC_FMC2_ACQRUN_SHIFT    4
-
-
 #define IFC_SCOPE_SRAM_SAMPLES_OFFSET        		0x01100000
-#define IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET   	0x00100000
-#define IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET   	0x00200000
 #define IFC_SCOPE_SMEM_FMC2_SAMPLES_OFFSET   		0x10000000
 
 #define IFC_SCOPE_MLVDS_CONTROL_REG					0x09
@@ -119,8 +107,43 @@
 #define PRETRIG_ORGANIZE 1
 #endif
 
-ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice);
+/* Functions for accessing SCOPE ACQ TCSR  (0x70-0x73, 0x74-0x77, 0x78-0x7B, 0x7C-0x7F (SCOPE FMC1/FMC2 and SRAM/SMEM specific)) */
+static inline int32_t ifc_get_scope_acq_tcsr_offset(struct ifcdaqdrv_dev *ifcdevice) {
+    if(ifcdevice->fmc == 1) {
+        if(ifcdevice->mode == ifcdaqdrv_acq_mode_sram) {
+            return 0x70;
+        } else {
+            return 0x78;
+        }
+    } else {
+        if(ifcdevice->mode == ifcdaqdrv_acq_mode_sram){
+            return 0x74;
+        } else {
+            return 0x7C;
+        }
+    }
+}
+/* Functions for accessing SCOPE MAIN TCSR (0x60 to 0x6F) */
+ifcdaqdrv_status ifc_scope_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val);
+ifcdaqdrv_status ifc_scope_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value);
+ifcdaqdrv_status ifc_scope_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
+                                       clrmask);
 
+/* Functions for accessing SCOPE ACQ TCSR  (0x70-0x73, 0x74-0x77, 0x78-0x7B, 0x7C-0x7F (SCOPE FMC1/FMC2 and SRAM/SMEM specific)) */
+ifcdaqdrv_status ifc_scope_acq_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val);
+ifcdaqdrv_status ifc_scope_acq_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value);
+ifcdaqdrv_status ifc_scope_acq_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
+                                           clrmask);
+
+ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice);
+ifcdaqdrv_status ifcdaqdrv_scope_arm_device(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_scope_disarm_device(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_scope_wait_acq_end(struct ifcdaqdrv_usr *ifcuser);
+
+ifcdaqdrv_status ifcdaqdrv_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type trigger, int32_t threshold, uint32_t mask, uint32_t rising_edge);
+ifcdaqdrv_status ifcdaqdrv_scope_get_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type *trigger, int32_t *threshold, uint32_t *mask, uint32_t *rising_edge);
+ifcdaqdrv_status ifcdaqdrv_scope_set_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t threshold);
+ifcdaqdrv_status ifcdaqdrv_scope_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t *threshold);
 
 ifcdaqdrv_status ifcdaqdrv_scope_get_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned *nsamples);
 ifcdaqdrv_status ifcdaqdrv_scope_set_sram_nsamples(struct ifcdaqdrv_dev *ifcdevice, unsigned nsamples);
@@ -145,10 +168,8 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_smem_nsamples(struct ifcdaqdrv_dev *ifcdevi
  */
 //ifcdaqdrv_status ifc_scope_vmeio_init(struct ifcdaqdrv_dev *ifcdevice);
 
-ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
-ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
-ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
-ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
+ifcdaqdrv_status ifcdaqdrv_scope_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
+ifcdaqdrv_status ifcdaqdrv_scope_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
 
 ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *data);
 ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *data);
@@ -163,15 +184,19 @@ ifcdaqdrv_status ifcdaqdrv_scope_switch_mode(struct ifcdaqdrv_dev *ifcdevice, if
 ifcdaqdrv_status ifcdaqdrv_scope_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples);
 ifcdaqdrv_status ifcdaqdrv_scope_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t nsamples);
 
-ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t *npretrig);
-ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_scope_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
+ifcdaqdrv_status ifcdaqdrv_scope_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
 
 ifcdaqdrv_status ifcdaqdrv_scope_get_average(struct ifcdaqdrv_dev *ifcdevice, uint32_t *average);
 ifcdaqdrv_status ifcdaqdrv_scope_set_average(struct ifcdaqdrv_dev *ifcdevice, uint32_t average);
 
+ifcdaqdrv_status ifcdaqdrv_scope_set_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_t decimation);
+ifcdaqdrv_status ifcdaqdrv_scope_get_decimation(struct ifcdaqdrv_usr *ifcuser, uint32_t *decimation);
+
 ifcdaqdrv_status ifcdaqdrv_scope_init_smem_mode(struct ifcdaqdrv_dev *ifcdevice);
 
-ifcdaqdrv_status ifcdaqdrv_scope_smem_clearacq(struct ifcdaqdrv_dev *ifcdevice);
-ifcdaqdrv_status ifcdaqdrv_scope_smem_configacq(struct ifcdaqdrv_dev *ifcdevice);
+//Remove these
+ifcdaqdrv_status ifcdaqdrv_scope_set_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_scope_get_npretrig(struct ifcdaqdrv_dev *ifcdevice, uint32_t *npretrig);
 
-#endif // _IFC_SCOPE_H_
+#endif // _IFCDAQDRV_SCOPE_H_

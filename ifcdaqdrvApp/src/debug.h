@@ -42,12 +42,6 @@ static const char __attribute__((unused)) *level_str[] = {"", "", "", "E", "W", 
 #define DEBUG 1
 #endif /* NDEBUG */
 
-#define I2C_CTL_EXEC_IDLE 0x00000000
-#define I2C_CTL_EXEC_RUN  0x00100000
-#define I2C_CTL_EXEC_DONE 0x00200000
-#define I2C_CTL_EXEC_ERR  0x00300000
-#define I2C_CTL_EXEC_MASK 0x00300000
-
 #define LOG(x)    do { LOG_ARGS x; } while (0)
 
 #define LOG_ARGS(level, fmt, args...) \
@@ -58,13 +52,10 @@ static const char __attribute__((unused)) *level_str[] = {"", "", "", "E", "W", 
       } \
     }
 
-
 #define INFOLOG(msg)	do { INFOLOG_ARGS msg; } while (0)
 #define INFOLOG_ARGS(fmt, args...) \
     fprintf(stderr, "[IFC1410 driver] "); \
     fprintf(stderr, fmt, ## args);
-
-
 
 extern int32_t ifcdaqdrvDebug;
 

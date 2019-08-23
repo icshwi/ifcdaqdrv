@@ -6,20 +6,15 @@
 #include <string.h>
 #include <signal.h>
 #include <inttypes.h>
-typedef long dma_addr_t;
-
 #include <time.h>
 
 #include "tscioctl.h"
 #include "tsculib.h"
 
 #include "debug.h"
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
-// #include "ifcdaqdrv_acq420.h"
-#include "ifcdaqdrv_adc3110.h"
-#include "ifcdaqdrv_scope.h"
 
 // Variables for the time-measure tool
 struct timespec ts_start, ts_end;
@@ -28,7 +23,6 @@ ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int 
 {
     int ret;
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
-        // error message
         fprintf(stderr,"ERROR: ifc_tcsr_read(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
             offset, register_idx);
         return -1;
@@ -44,7 +38,6 @@ ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int 
 ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value)
 {
     if ((register_idx < 0) || (register_idx >= 0x3FF)) {
-        // error message
         fprintf(stderr,"ERROR: ifc_tcsr_write(offset=0x%x,idx=%d) idx is out of range! (valid range is 0..0x3ff (1024))",
             offset, register_idx);
         return -1;
@@ -89,36 +82,6 @@ ifcdaqdrv_status ifc_xuser_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int regis
 ifcdaqdrv_status ifc_xuser_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
                                        clrmask){
     return ifc_tcsr_setclr(ifcdevice, OFFSET_XUSER_CSR, register_idx, setmask, clrmask);
-}
-
-/* Functions for accessing 0x60 to 0x6F (SCOPE MAIN TCSR) */
-
-ifcdaqdrv_status ifc_scope_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val){
-    return ifc_tcsr_read(ifcdevice, OFFSET_XUSER_CSR, 0x60 + register_idx, i32_reg_val);
-}
-
-ifcdaqdrv_status ifc_scope_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value){
-    return ifc_tcsr_write(ifcdevice, OFFSET_XUSER_CSR, 0x60 + register_idx, value);
-}
-
-ifcdaqdrv_status ifc_scope_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
-                                       clrmask){
-    return ifc_tcsr_setclr(ifcdevice, OFFSET_XUSER_CSR, 0x60 + register_idx, setmask, clrmask);
-}
-
-/* Functions for accessing 0x70-0x73, 0x74-0x77, 0x78-0x7B, 0x7C-0x7F (SCOPE FMC1/FMC2 and SRAM/SMEM specific) registers */
-
-ifcdaqdrv_status ifc_scope_acq_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val){
-    return ifc_tcsr_read(ifcdevice, OFFSET_XUSER_CSR, ifc_get_scope_tcsr_offset(ifcdevice) + register_idx, i32_reg_val);
-}
-
-ifcdaqdrv_status ifc_scope_acq_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value){
-    return ifc_tcsr_write(ifcdevice, OFFSET_XUSER_CSR, ifc_get_scope_tcsr_offset(ifcdevice) + register_idx, value);
-}
-
-ifcdaqdrv_status ifc_scope_acq_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
-                                           clrmask){
-    return ifc_tcsr_setclr(ifcdevice, OFFSET_XUSER_CSR, ifc_get_scope_tcsr_offset(ifcdevice) + register_idx, setmask, clrmask);
 }
 
 /* Functions for accessing 0x80-0xBF or 0xC0-0xFF based on FMC1/FMC2. */
@@ -175,7 +138,6 @@ void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice){
 }
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
-    //void *p;
     int ret;
 
     ifcdevice->sram_dma_buf = calloc(1, sizeof(struct tsc_ioctl_kbuf_req));
@@ -204,10 +166,10 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     }
 
     if (ifcdevice->smem_sg_dma) {
-        if (ifcdevice->smem_size > TSC_MAX_DMA_LEN)
-            ifcdevice->smem_size = TSC_MAX_DMA_LEN;
+        if (ifcdevice->smem_size > TSC_MAX_SG_DMA_LEN)
+            ifcdevice->smem_size = TSC_MAX_SG_DMA_LEN;
         ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
-        LOG((5, "Trying to allocate %dMiB in userspace for scatter gather SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
+        LOG((5, "Trying to allocate %dkiB in userspace for scatter gather SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
         ifcdevice->smem_dma_buf->u_base = aligned_alloc(sysconf(_SC_PAGESIZE), ifcdevice->smem_dma_buf->size);
         if(!ifcdevice->smem_dma_buf->u_base) {
             fprintf(stderr, "ERROR: aligned_alloc() failed\n");
@@ -215,10 +177,12 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         }
     }
     else {
-        // Try to allocate as large dma memory as possible
+        // Try to allocate as large dma memory as possible but maximum TSC_MAX_DMA_LEN (15MB) due to Tosca limit
+        if (ifcdevice->smem_size > TSC_MAX_DMA_LEN)
+            ifcdevice->smem_size = TSC_MAX_DMA_LEN;
         ifcdevice->smem_dma_buf->size = ifcdevice->smem_size;
         do {
-            LOG((5, "Trying to allocate %dMiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024 / 1024));
+            LOG((5, "Trying to allocate %dkiB in kernel for SMEM acquisition\n", ifcdevice->smem_dma_buf->size / 1024));
             ret = tsc_kbuf_alloc(ifcdevice->node, ifcdevice->smem_dma_buf);
         } while ((ret < 0) && (ifcdevice->smem_dma_buf->size >>= 1) > 0);
 
@@ -235,7 +199,7 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
         }
     }
 
-    LOG((5, "Trying to allocate %dMiB in userspace\n", ifcdevice->smem_size / 1024 / 1024));
+    LOG((5, "Trying to allocate %dkiB in userspace\n", ifcdevice->smem_size / 1024));
     ifcdevice->all_ch_buf = calloc(ifcdevice->smem_size, 1);
     if(!ifcdevice->all_ch_buf){
         fprintf(stderr, "calloc(ifcdevice->smem_size, 1) failed\n");
@@ -253,7 +217,6 @@ ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice) {
     /* This routine was used during development to check the memory allocation */
 
 #if 0
-//#ifdef DEBUG
     uint64_t tp_sram;
     uint64_t tp_smem;
     tp_sram = (uint64_t) ifcdevice->sram_dma_buf->u_base;
@@ -299,7 +262,6 @@ err_sram_buf:
 
 err_sram_ctl:
     return status_internal;
-
 }
 
 
@@ -313,14 +275,14 @@ err_sram_ctl:
  * @param size Size in bytes
  */
 ifcdaqdrv_status 
-ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
-			    , dma_addr_t src_addr
-			    , uint8_t src_space
-			    , uint8_t src_mode
-			    , dma_addr_t des_addr
-			    , uint8_t des_space
-			    , uint8_t des_mode
-			    , uint32_t size) 
+ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice,
+			    uint64_t src_addr,
+			    uint8_t src_space,
+			    uint8_t src_mode,
+			    uint64_t des_addr,
+			    uint8_t des_space,
+			    uint8_t des_mode,
+			    uint32_t size)
 {
     struct tsc_ioctl_dma_req dma_req = {0};
     int status;
@@ -341,6 +303,7 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
         LOG((LEVEL_ERROR, "tsc_dma_transfer() returned 0x%x, DMA status 0x%08x\n", status, dma_req.dma_status));
         return status;
     }
+
     return  status_success;
 }
 
@@ -368,44 +331,15 @@ static inline int32_t swap_mask(struct ifcdaqdrv_dev *ifcdevice) {
 ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
     int status;
 
-    /* TODO: check usage of base address of the buffer. Tosca doesn't use pointer */
-    //if (!dma_buf || !dma_buf->b_addr) {
     if (!dma_buf || !dma_buf->b_base) {
         return status_internal;
     }
 
-    /* workaround */
-#ifndef DMA_SPACE_USR1
-    #define DMA_SPACE_USR1 0x04
-#endif
-
-#ifndef DMA_SPACE_USR2
-    #define DMA_SPACE_USR2 0x05
-#endif
-
-
-    // dma_buf->u_base is already dma_addr_t, no need to cast to ulong
-    // "offset" will be casted 
-
-    uint8_t src_space_;
-    if (ifcdevice->board_id == 0x3117) {
-        src_space_ = DMA_SPACE_USR1;
-    } else {
-        if (ifcdevice->fmc == 1) {
-            src_space_ = DMA_SPACE_USR1;
-        } else {
-            src_space_ = DMA_SPACE_USR2;
-        }
-    }
-
-
-    /*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
-    status = ifcdaqdrv_dma_read_unlocked(
-					 ifcdevice,
-					 (dma_addr_t) offset, 
-					 src_space_, 
+    status = ifcdaqdrv_dma_read_unlocked(ifcdevice,
+					 (uint64_t) offset,
+					 ifcdevice->fmc == 1 ? DMA_SPACE_USR : DMA_SPACE_USR2,
 					 DMA_PCIE_RR2,
-					 dma_buf->b_base, 
+					 dma_buf->b_base,
 					 ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
 					 DMA_PCIE_RR2,
 					 size);
@@ -413,30 +347,19 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
     return status;
 }
 
-// This is a fixed offset for FMC2 since SCOPE2 stores samples at this offset (256 MiB).
-static inline int32_t smem_fmc_offset(struct ifcdaqdrv_dev *ifcdevice){
-    return ifcdevice->fmc == 1 ? 0 : IFC_SCOPE_SMEM_FMC2_SAMPLES_OFFSET;
-}
-
 void ifc_stop_timer(struct ifcdaqdrv_dev *ifcdevice) {
-    //pevx_timer_stop(ifcdevice->card);
     tsc_timer_stop(ifcdevice->node);
 }
 
 void ifc_init_timer(struct ifcdaqdrv_dev *ifcdevice){
-    // pevx_timer_start(ifcdevice->card, TIMER_1MHZ ,0);
     tsc_timer_start(ifcdevice->node, TIMER_1MHZ, 0);
 }
 
 uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
-
-    // struct pevx_time tim;  
-    // pevx_timer_read(ifcdevice->card, &tim);
     struct tsc_time tim;
     tsc_timer_read(ifcdevice->node, &tim);
 
     return ((uint64_t)tim.msec * 1000) + (uint64_t)(tim.usec & 0x1ffff) / 100;
-    
 }
 
 /*
@@ -452,18 +375,14 @@ uint64_t ifc_get_timer(struct ifcdaqdrv_dev *ifcdevice){
 
 ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size) {
     int status;
-    intptr_t src_addr;
     uint32_t current_size;
-    uint32_t total_size; /* Debug variable */
+    uint32_t total_size = 0;
     uint64_t __attribute__((unused)) total_time; /* Debug variable */
 
     //long meastime = 0;
 
-    if(DEBUG) total_size = size;
     LOG((LEVEL_DEBUG, "Copying from: 0x%08x, amount: %u\n", offset, size));
 
-    /* TODO: check usage of base address of the buffer. Tosca doesn't use pointer */
-    //if (!dma_buf || !dma_buf->b_addr) {
     if (!ifcdevice->smem_sg_dma && (!dma_buf || !dma_buf->b_base)) {
         return status_internal;
     }
@@ -471,16 +390,12 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
         return status_internal;
     }
 
-    src_addr = smem_fmc_offset(ifcdevice) + offset;
     current_size = dma_buf->size;
     //if(DEBUG) ifc_init_timer(ifcdevice);
     while(size != 0) {
         if(size < dma_buf->size) {
             current_size = size;
         }
-
-        // dma_buf is already dma_addr_t
-        // src_addr sholud be casted
 
 #if 0
 	printf(" [smem_read] dma_buf->size = %"PRIu32" \n", dma_buf->size);
@@ -491,26 +406,24 @@ ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, v
 	printf(" [smem_read] size = 0x%08x \n", size);
 #endif
 
-	/*TODO: add the flag to src/dest space (DMA_SPACE_x )*/
-        status = ifcdaqdrv_dma_read_unlocked(
-					     ifcdevice,
-					     (dma_addr_t) src_addr, 
-					     DMA_SPACE_SHM, 
+        status = ifcdaqdrv_dma_read_unlocked(ifcdevice,
+					     (uint64_t) offset,
+					     ifcdevice->fmc == 1 ? DMA_SPACE_SHM : DMA_SPACE_SHM2,
 					     DMA_PCIE_RR2,
 					     ifcdevice->smem_sg_dma ? (uint64_t)dma_buf->u_base : dma_buf->b_base,
 					     ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE | DMA_SPACE_WS : DMA_SPACE_PCIE1 | DMA_SPACE_WS,
 					     DMA_PCIE_RR2,
-					     current_size | DMA_SIZE_PKT_1K
-					     );
+					     current_size | DMA_SIZE_PKT_1K);
 
         if (status != 0) {
             return status;
         }
 
-        memcpy(res + src_addr - (smem_fmc_offset(ifcdevice) + offset), dma_buf->u_base, current_size);
+        memcpy(res + total_size, dma_buf->u_base, current_size);
 
-        src_addr += current_size;
-        size     -= current_size;
+        offset += current_size;
+        size -= current_size;
+        total_size += current_size;
     }
 
     //if(DEBUG) total_time = ifc_get_timer(ifcdevice);

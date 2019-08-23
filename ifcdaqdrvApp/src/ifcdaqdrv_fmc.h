@@ -1,34 +1,5 @@
-#ifndef _IFC1210SCOPEDRV_FMC_H_
-#define _IFC1210SCOPEDRV_FMC_H_ 1
-
-typedef enum {
-    FMC_NOTINSTALLED,
-
-    FMC_ADC_3110,
-    FMC_ADC_3111,
-    FMC_ADC_3112,
-    FMC_ADC_3113,
-
-    FMC_DTACQ_ACQ420,
-
-    FMC_UNKNOWN
-} FMCTYP;
-
-const char *fmctypToName(FMCTYP fmctyp);
-
-/* Temporary, don't think I need this.. */
-struct fmcinfo {
-    struct fmc_fru_id *fru_id;
-    uint32_t           Signature;
-    FMCTYP             fmcTyp;
-    uint32_t           HWRevision;
-    uint32_t           HWVersion;
-    const char        *description;
-    const char        *descriptionshort;
-    uint32_t           acqDPRAM_BufferSize;          // number of int16_t samples available
-    uint32_t           acqDPRAM_BufferSize_Reserved; // number of int16_t samples reserved space (z.b XUSER SCOPE 64KByte(32ksps))
-    uint32_t           nChannels;                    // number of channels
-};
+#ifndef _IFCDAQDRV_FMC_H_
+#define _IFCDAQDRV_FMC_H_ 1
 
 struct fmc_fru_id { char *manufacturer;
                     char *product_name;
@@ -51,4 +22,4 @@ ifcdaqdrv_status ifc_fmc_eeprom_read(struct ifcdaqdrv_dev *ifcdevice, uint16_t a
 
 ifcdaqdrv_status ifc_fmc_eeprom_read_sig(struct ifcdaqdrv_dev *ifcdevice, uint8_t *data);
 
-#endif // _IFC1210SCOPEDRV_FMC_H_
+#endif // _IFCDAQDRV_FMC_H_
