@@ -19,6 +19,7 @@ extern "C" {
 #define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
 #define IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE  0x73570001
 #define IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE    0x12361717
+#define IFC1410SCOPEDRV_SCOPE_LITE_4CHANNELS  0x73571704
 
 /**
  * @brief Constants to select backplane lines
@@ -615,10 +616,6 @@ ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t c
 
 ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser);
 
-ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
-ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
-ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn); 
-
 ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser);
 
 ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines);
@@ -632,6 +629,24 @@ ifcdaqdrv_status ifcdaqdrv_read_scopestatus(struct ifcdaqdrv_usr *ifcuser, uint3
 ifcdaqdrv_status ifcdaqdrv_read_acqdone(struct ifcdaqdrv_usr *ifcuser, uint32_t *acqdone);
 ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser);
 
+ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_write_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
+ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
+
+/* Function identifiers for SCOPE 4 CHANNELS */
+#define SCOPE4CH_FUNCTION_OFFSET            10 // random for now...
+#define SCOPE4CH_WRITE_ENABLE_BACKPLANE     (SCOPE4CH_FUNCTION_OFFSET+0)
+#define SCOPE4CH_WRITE_DISABLE_BACKPLANE    (SCOPE4CH_FUNCTION_OFFSET+1)
+#define SCOPE4CH_WRITE_ACK_ACQUISITION      (SCOPE4CH_FUNCTION_OFFSET+2)
+#define SCOPE4CH_WRITE_ARM_ACQUISITION      (SCOPE4CH_FUNCTION_OFFSET+3)
+#define SCOPE4CH_WRITE_SOFT_TRIGGER         (SCOPE4CH_FUNCTION_OFFSET+4)
+
+#define SCOPE4CH_READ_TRIGGER_COUNT         (SCOPE4CH_FUNCTION_OFFSET+5)
+#define SCOPE4CH_READ_ACQ_COUNT             (SCOPE4CH_FUNCTION_OFFSET+6)
+#define SCOPE4CH_READ_SCOPE_STATUS          (SCOPE4CH_FUNCTION_OFFSET+7)
+#define SCOPE4CH_READ_ACQ_DONE              (SCOPE4CH_FUNCTION_OFFSET+8)
 
 #ifdef __cplusplus
 }

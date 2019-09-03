@@ -18,6 +18,7 @@
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
+#include "ifcdaqdrv_scope4ch.h"
 #include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 #include "ifcdaqdrv_enhanced_scope.h"
@@ -190,8 +191,8 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
+    //case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
     case IFC1410SCOPEDRV_SCOPE_SIGNATURE:
-    case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
         status = ifcdaqdrv_scope_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
@@ -202,8 +203,25 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
                 goto err_read;
             }
         }
-        INFOLOG(("Initiated SCOPE firmware\n"));
+        INFOLOG(("Initiated SCOPE ADC3110 firmware\n"));
         break;
+    
+    case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
+    case IFC1410SCOPEDRV_SCOPE_LITE_4CHANNELS:
+        INFOLOG(("Identified %s on FMC slot 1\n",ifcdevice->fru_id->product_name));
+        status = scope4ch_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+    
+        status = ifcdaqdrv_dma_allocate(ifcdevice);
+        if(status) {
+            goto err_read;
+        }
+    
+        INFOLOG(("Initiated SCOPE LITE 4 Channels firmware\n"));
+        break;
+    
     case IFC1210FASTINT_APP_SIGNATURE:
         status = ifcfastintdrv_register(ifcdevice);
         if(status) {
@@ -535,6 +553,10 @@ ifcdaqdrv_status ifcdaqdrv_wait_acq_end(struct ifcdaqdrv_usr *ifcuser) {
     if (!ifcdevice->armed) {
         return status_cancel;
     }
+
+    /* If using Scope Lite 4-Channels firmware it needs additional acknowledge            */
+    /* it is safe to use if ifcdevice doesn't have ifcdaqdrv_write_generic implemented!!! */ 
+    ifcdaqdrv_write_generic(ifcuser, SCOPE4CH_WRITE_ACK_ACQUISITION, NULL); 
 
     ifcdaqdrv_disarm_device(ifcuser);
     return status;
@@ -2059,8 +2081,6 @@ ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t i
     return status;
 }
 
-
-
 ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn) 
 {
     ifcdaqdrv_status      status;
@@ -2125,7 +2145,9 @@ ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser)
     return status;
 }
 
-ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines) 
+
+/* Execute a particular write function of some driver - act as remote procedure call */
+ifcdaqdrv_status ifcdaqdrv_write_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data) 
 {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
@@ -2133,18 +2155,21 @@ ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint3
     ifcdevice = ifcuser->device;
     if (!ifcdevice) {
         return status_no_device;
+    }
+
+    if(!ifcdevice->write_generic) {
+        return status_no_support;
     }
 
     pthread_mutex_lock(&ifcdevice->lock);
-
-    backplane_lines = backplane_lines & 0xff;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, backplane_lines, 0x00);
-
+    status = ifcdevice->write_generic(ifcdevice, function, data);
     pthread_mutex_unlock(&ifcdevice->lock);
+
     return status;
 }
 
-ifcdaqdrv_status ifcdaqdrv_disable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines) 
+/* Execute a particular read function of some driver - act as remote procedure call */
+ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data) 
 {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
@@ -2154,166 +2179,11 @@ ifcdaqdrv_status ifcdaqdrv_disable_backplane(struct ifcdaqdrv_usr *ifcuser, uint
         return status_no_device;
     }
 
-    pthread_mutex_lock(&ifcdevice->lock);
-
-    backplane_lines = backplane_lines & 0xff;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, backplane_lines);
-
-    pthread_mutex_unlock(&ifcdevice->lock);
-    return status;
-}
-
-ifcdaqdrv_status ifcdaqdrv_read_backplane_trgcnt(struct ifcdaqdrv_usr *ifcuser, uint32_t *trig_cnt) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-    int32_t i32_reg_val;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
+    if(!ifcdevice->read_generic) {
+        return status_no_support;
     }
 
-    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
-    *trig_cnt = (uint32_t) (i32_reg_val >> 16) & 0x0f;
+    status = ifcdevice->read_generic(ifcdevice, function, data);
 
-    return status;
-}
-
-
-ifcdaqdrv_status ifcdaqdrv_read_acq_count(struct ifcdaqdrv_usr *ifcuser, uint32_t *acq_cnt) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-    int32_t i32_reg_val;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-
-    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
-    *acq_cnt = (uint32_t) (i32_reg_val >> 8) & 0x0f;
-
-    return status;
-}
-
-
-ifcdaqdrv_status ifcdaqdrv_ack_acquisition(struct ifcdaqdrv_usr *ifcuser) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    pthread_mutex_lock(&ifcdevice->lock);
-
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x110FF, 0x00);
-
-    pthread_mutex_unlock(&ifcdevice->lock);
-    return status;
-}
-
-
-ifcdaqdrv_status ifcdaqdrv_arm_scopelite(struct ifcdaqdrv_usr *ifcuser) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    pthread_mutex_lock(&ifcdevice->lock);
-
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_REG_69, 1<<1, 0x00);
-    ifcdevice->armed = 1;
-
-
-    pthread_mutex_unlock(&ifcdevice->lock);
-    return status;
-}
-
-
-ifcdaqdrv_status ifcdaqdrv_scopelite_trigger(struct ifcdaqdrv_usr *ifcuser) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    pthread_mutex_lock(&ifcdevice->lock);
-
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00);
-
-    pthread_mutex_unlock(&ifcdevice->lock);
-    return status;
-}
-
-ifcdaqdrv_status ifcdaqdrv_read_scopestatus(struct ifcdaqdrv_usr *ifcuser, uint32_t *scopest) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-    int32_t i32_reg_val;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    status = ifc_xuser_tcsr_read(ifcdevice, 0x66, &i32_reg_val);
-    *scopest = (uint32_t) (i32_reg_val >> 12) & 0x0f;
-
-    return status;
-}
-
-ifcdaqdrv_status ifcdaqdrv_read_acqdone(struct ifcdaqdrv_usr *ifcuser, uint32_t *acqdone) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-    int32_t i32_reg_val;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    status = ifc_xuser_tcsr_read(ifcdevice, 0x69, &i32_reg_val);
-    *acqdone = (uint32_t) (i32_reg_val >> 7) & 0x01;
-
-    return status;
-}
-
-
-ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser) {
-    ifcdaqdrv_status      status;
-    int32_t               i32_reg_val;
-    struct ifcdaqdrv_dev *ifcdevice;
-
-    ifcdevice = ifcuser->device;
-
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    do {
-        status = ifc_scope_tcsr_read(ifcdevice, ADC3117_SBUF_CONTROL_STATUS_REG, &i32_reg_val);
-        usleep(ifcdevice->poll_period);
-    } while (!status && ifcdevice->armed && ((i32_reg_val & 0x00000080) != 0x00000080));
-
-    if (!ifcdevice->armed) {
-        return status_cancel;
-    }
-
-    ifcdaqdrv_ack_acquisition(ifcuser);
-    ifcdaqdrv_disarm_device(ifcuser);
     return status;
 }

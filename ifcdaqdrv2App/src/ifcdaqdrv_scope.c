@@ -47,15 +47,12 @@ ifcdaqdrv_status ifcdaqdrv_scope_register(struct ifcdaqdrv_dev *ifcdevice){
         } else if (strcmp(p, "ADC3117") == 0) {
             INFOLOG(("Identified ADC3117 on FMC %d\n", ifcdevice->fmc));
             adc3117_register(ifcdevice);
-            adc3117_scopelite_test(ifcdevice);
         } else if (strcmp(p, "DIO3118") == 0) {
             INFOLOG(("Identified DIO3118 on FMC %d\n", ifcdevice->fmc));
             dio3118_register(ifcdevice);
         }else {
             LOG((LEVEL_ERROR, "No recognized device %s - but will force ADC3117\n", p));
             return status_incompatible;
-            // adc3117_register(ifcdevice);
-            // adc3117_scopelite_test(ifcdevice);
         }
     } else {
         LOG((4, "Internal error, no product_name\n"));
@@ -270,8 +267,6 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai(struct ifcdaqdrv_dev *ifcdevice, void *
     case ifcdaqdrv_acq_mode_smem:
         offset = 0;
 
-        printf("Entered ifcdaqdrv_scope_read_ai with case ifcdaqdrv_acq_mode_smem\n");
-
         ifcdaqdrv_start_tmeas();
         status = ifcdaqdrv_read_smem_unlocked(ifcdevice, ifcdevice->all_ch_buf, ifcdevice->smem_dma_buf, offset, nsamples * ifcdevice->nchannels * ifcdevice->sample_size);
         if (status) {
@@ -447,7 +442,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
     printf("\n");
 #endif
 
-#if PRETRIG_ORGANIZE
+#if 1//PRETRIG_ORGANIZE
     /* When a pretrigger amount is selected, the first chunk of the memory is a circular buffer. The memory is
      * therefore structured in the following parts:
      *
