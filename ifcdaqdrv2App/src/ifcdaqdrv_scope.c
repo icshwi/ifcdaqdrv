@@ -364,6 +364,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
 
     switch(ifcdevice->mode) {
     case ifcdaqdrv_acq_mode_sram:
+#if 0        
         if (ifcdevice->board_id == 0x3117) {
             //if (ifcdevice->fmc == 1) {
             if (channel < 2) {
@@ -374,7 +375,18 @@ ifcdaqdrv_status ifcdaqdrv_scope_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uin
         } else {
             offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
         }
+#endif
 
+        if (ifcdevice->board_id == 0x3117) {
+            if (ifcdevice->fmc == 1) {
+                offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel << 12);
+            } else {
+                offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel << 12);
+            }
+        } else {
+            offset = IFC_SCOPE_SRAM_SAMPLES_OFFSET + (channel << 16);
+        }
+    
         status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
         if (status) {
             return status;

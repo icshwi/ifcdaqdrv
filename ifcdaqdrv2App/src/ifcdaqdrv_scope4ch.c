@@ -77,7 +77,7 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
     ifcdevice->sample_size = 2;
-    ifcdevice->nchannels   = 4;
+    ifcdevice->nchannels   = 20;
     ifcdevice->resolution  = 16;
     ifcdevice->sample_resolution = 16;
     ifcdevice->vref_max = 10.24;
@@ -304,7 +304,7 @@ ifcdaqdrv_status scope4ch_read_allchannels(struct ifcdaqdrv_dev *ifcdevice, void
     uint32_t last_address = 0, nsamples = 0, npretrig = 0, ptq = 0;
     uint32_t channel;
 
-    printf("Entering scope4ch_read_allchannels\n");
+    //printf("Entering scope4ch_read_allchannels\n");
 
     /* TODO: fix NSAMPLES - currently will always return max samples */
     ifcdevice->get_nsamples(ifcdevice, &nsamples);
@@ -333,16 +333,24 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     npretrig = 0;
     ptq = 0;
 
-    printf("Entering scope4ch_read_ai_ch\n");
+    //printf("Entering scope4ch_read_ai_ch\n");
 
     /* TODO: fix NSAMPLES - currently will always return max samples */
     ifcdevice->get_nsamples(ifcdevice, &nsamples);
 
     /* ADDRESS DEFINITIONS */
+#if 0    
     if (channel < 2) {
         offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel * 0x40000);
     } else {
         offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel * 0x40000);
+    }
+#endif
+
+    if (ifcdevice->fmc == 1) {
+        offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel << 12);
+    } else {
+        offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel << 12);
     }
 
     status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
@@ -381,7 +389,7 @@ ifcdaqdrv_status scope4ch_normalize_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     int16_t *itr;
     int32_t *target = res;
 
-    printf("Entering scope4ch_normalize_ch\n");
+    //printf("Entering scope4ch_normalize_ch\n");
 
     for (itr = origin; itr < origin + nelm; ++target, ++itr) {
         *target = (int16_t)(*itr);

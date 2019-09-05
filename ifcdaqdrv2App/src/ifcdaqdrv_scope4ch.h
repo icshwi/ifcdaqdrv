@@ -6,7 +6,10 @@
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_scope.h"
 
-#define SCOPE4CH_MAX_SAMPLES 122880 // Limited to 120k samples (120*1024)
+//#define SCOPE4CH_MAX_SAMPLES 122880 // Limited to 120k samples (120*1024)
+
+#define SCOPE24CH_MAX_SAMPLES 2048 
+#define SCOPE4CH_MAX_SAMPLES SCOPE24CH_MAX_SAMPLES
 
 ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice);
 
