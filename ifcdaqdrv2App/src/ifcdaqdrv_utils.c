@@ -323,117 +323,23 @@ ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice
 			    , uint32_t size) 
 {
     struct tsc_ioctl_dma_req dma_req = {0};
-
     int status;
-    uint32_t valid_dma_status;
-    struct tsc_ioctl_dma_sts dma_sts;
-    struct tsc_ioctl_dma_mode dma_mode;
 
-    /* Assuming that we are using channel ZERO */
-    
-#if 0 //#ifdef PEV_MOV_MODE 
-    dma_req.src_addr  = src_addr;
-    dma_req.src_space = src_space;
-    dma_req.src_mode  = src_mode;
-
-    dma_req.des_addr  = des_addr;
-    dma_req.des_space = des_space;
-    dma_req.des_mode  = des_mode;
-
-    dma_req.size       = size;
-
-    dma_req.start_mode = DMA_START_PIPE;
-    dma_req.intr_mode  = DMA_INTR_ENA;                             // enable interrupt
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_10MS | (5 << 4); // Timeout after 50 ms
-#endif
-
-    /* Based on TscMon source code */
     dma_req.src_addr  = src_addr;
     dma_req.src_space = src_space;
     dma_req.src_mode  = 0;
-
     dma_req.des_addr  = des_addr;
     dma_req.des_space = des_space;
     dma_req.des_mode  = 0;
-
     dma_req.size       = size;
-
     dma_req.end_mode   = 0;
-    dma_req.start_mode = DMA_START_CHAN(0);
     dma_req.intr_mode  = DMA_INTR_ENA;
     dma_req.wait_mode  = 0;
 
-    if (ifcdevice->smem_sg_dma) {
-        dma_mode.mode = DMA_MODE_SET | DMA_MODE_SG;
-        dma_mode.chan = 0;
-        tsc_dma_mode(ifcdevice->node, &dma_mode);
-    }
-
-    //printf("------- \n Preparing DMA operation \n");
-    //printf("Source Address = 0x%08x\n", (uint32_t) src_addr);
-    //printf("Destin Address = 0x%08x\n", (uint32_t) des_addr);
-
-    status = tsc_dma_alloc(ifcdevice->node, 0);
-    if (status) 
-    {
-      LOG((LEVEL_WARNING, "%s() tsc_dma_alloc(0) == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(ifcdevice->node, &dma_sts);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    status = tsc_dma_move(ifcdevice->node, &dma_req);
-    if (status != 0) {
-        LOG((LEVEL_WARNING, "%s() tsc_dma_move() == %d status = 0x%08x\n", __FUNCTION__, status, dma_req.dma_status));
-        return status_read;
-    }
-
-    dma_sts.dma.chan = 0;
-    status = tsc_dma_status(ifcdevice->node, &dma_sts);
-    
-    if (status) 
-    {
-      LOG((LEVEL_WARNING, "%s() tsc_dma_status() == %d \n", __FUNCTION__, status));
-      return status;
-    }
-
-    dma_req.wait_mode  = DMA_WAIT_INTR | DMA_WAIT_1S | (5 << 4); // Timeout after 50 ms
-    status = tsc_dma_wait(ifcdevice->node, &dma_req);
-
+    status = tsc_dma_transfer(ifcdevice->node, &dma_req);
     if (status) {
-        LOG((LEVEL_ERROR, "%s() tsc_dma_wait() returned %d\n", __FUNCTION__, status));
-    }
-    
-    // * 0x2 << 28 is the interrupt number.
-    // * The board can only read from the shared memory. If we are not reading
-    //   from shared memory the "WR0" will run because the DMA engine first has
-    //   to write the data into the shared memory.
-    valid_dma_status = (0x2 << 28) | DMA_STATUS_DONE | DMA_STATUS_ENDED | DMA_STATUS_RUN_RD0;
-    if(!(dma_req.src_space & DMA_SPACE_SHM)) {
-        valid_dma_status |= DMA_STATUS_RUN_WR0;
-    }
-
-    if (dma_req.dma_status != valid_dma_status) {
-        LOG((LEVEL_ERROR, "Error: %s() DMA error 0x%08x\n", __FUNCTION__, dma_req.dma_status));       
-        tsc_dma_clear(ifcdevice->node, 0);
-        usleep(1000);
-        tsc_dma_free(ifcdevice->node, 0);
-        usleep(1000);
-        return status_read;
-    }
-    
-    /*free DMA channel 0 */
-    status = tsc_dma_free(ifcdevice->node, 0);
-    if (status) 
-    {
-      LOG((LEVEL_ERROR, "%s() tsc_dma_free() == %d\n", __FUNCTION__, status));
-      return status_read;
+        LOG((LEVEL_ERROR, "tsc_dma_transfer() returned 0x%x, DMA status 0x%08x\n", status, dma_req.dma_status));
+        return status;
     }
     return  status_success;
 }
@@ -502,7 +408,7 @@ ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, s
 					 dma_buf->b_base, 
 					 ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1,
 					 DMA_PCIE_RR2,
-					 size | DMA_SIZE_PKT_1K);
+					 size);
 
     return status;
 }
