@@ -19,6 +19,7 @@
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
 #include "ifcdaqdrv_scope4ch.h"
+#include "ifcdaqdrv_scope20ch.h"
 #include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 #include "ifcdaqdrv_enhanced_scope.h"
@@ -191,7 +192,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
     case IFC1210SCOPEDRV_SCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE:
     case IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE:
-    //case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
+    case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
     case IFC1410SCOPEDRV_SCOPE_SIGNATURE:
         status = ifcdaqdrv_scope_register(ifcdevice);
         if(status) {
@@ -206,10 +207,24 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser) {
         INFOLOG(("Initiated SCOPE ADC3110 firmware\n"));
         break;
     
-    case IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE:
     case IFC1410SCOPEDRV_SCOPE_LITE_4CHANNELS:
         INFOLOG(("Identified %s on FMC slot 1\n",ifcdevice->fru_id->product_name));
         status = scope4ch_register(ifcdevice);
+        if(status) {
+            goto err_dev_alloc;
+        }
+    
+        status = ifcdaqdrv_dma_allocate(ifcdevice);
+        if(status) {
+            goto err_read;
+        }
+    
+        INFOLOG(("Initiated SCOPE LITE 4 Channels firmware\n"));
+        break;
+
+    case IFC1410SCOPEDRV_SCOPE_LITE_20CHANNELS:
+        INFOLOG(("Identified %s on FMC slot 1\n",ifcdevice->fru_id->product_name));
+        status = scope20ch_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
         }
