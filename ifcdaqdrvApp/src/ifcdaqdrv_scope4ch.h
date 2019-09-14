@@ -1,7 +1,7 @@
 #ifndef _IFC_SCOPE4CH_H_
 #define _IFC_SCOPE4CH_H_ 1
 
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_scope.h"
