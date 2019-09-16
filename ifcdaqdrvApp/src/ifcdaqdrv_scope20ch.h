@@ -6,6 +6,8 @@
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_scope.h"
 
+#define IFC1410SCOPEDRV_SCOPE_LITE_20CHANNELS 0x73571720
+
 #define SCOPE20CH_MAX_SAMPLES 2048 /* Hardcoded limitation */ 
 
 ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice);

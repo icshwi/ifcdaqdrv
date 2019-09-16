@@ -14,14 +14,17 @@
 #include "debug.h"
 #include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
+
 #include "ifcdaqdrv_scope.h"
 #include "ifcdaqdrv_scope_lite.h"
 #include "ifcdaqdrv_gen_scope.h"
+#include "ifcdaqdrv_scope4ch.h"
+#include "ifcdaqdrv_scope20ch.h"
+
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
-#include "ifcdaqdrv_scope4ch.h"
-#include "ifcdaqdrv_scope20ch.h"
+
 #include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 
@@ -160,11 +163,9 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser)
         if(status) {
             goto err_read;
         }
-        INFOLOG(("Initiated SCOPE ADC3110 firmware\n"));
         break;
     
     case IFC1410SCOPEDRV_SCOPE_LITE_4CHANNELS:
-        INFOLOG(("Identified %s on FMC slot 1\n",ifcdevice->fru_id->product_name));
         status = scope4ch_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
@@ -174,12 +175,12 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser)
         if(status) {
             goto err_read;
         }
+
+        INFOLOG(("SCOPE 4CHANNELS for LEBT EMU SUCCESSFULLY INITIATED\n"));
     
-        INFOLOG(("Initiated SCOPE LITE 4 Channels firmware\n"));
         break;
 
     case IFC1410SCOPEDRV_SCOPE_LITE_20CHANNELS:
-        INFOLOG(("Identified %s on FMC slot 1\n",ifcdevice->fru_id->product_name));
         status = scope20ch_register(ifcdevice);
         if(status) {
             goto err_dev_alloc;
@@ -190,7 +191,6 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser)
             goto err_read;
         }
     
-        INFOLOG(("Initiated SCOPE LITE 4 Channels firmware\n"));
         break;
     
     case IFC1210FASTINT_APP_SIGNATURE:
@@ -1288,82 +1288,6 @@ ifcdaqdrv_status ifcdaqdrv_debug(struct ifcdaqdrv_usr *ifcuser) {
 }
 #endif
 
-/* Function to simulate backplane trigger */
-ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider) 
-{
-    ifcdaqdrv_status      status;
-    struct ifcdaqdrv_dev *ifcdevice;
-    uint32_t __attribute__((unused)) ui32_regval;
-
-    ifcdevice = ifcuser->device;
-    if (!ifcdevice) {
-        return status_no_device;
-    }
-
-    status = status_success;
-
-    //TODO: remove this function from the library - it is not used anymore
-
-#if 0
-    switch (function)
-    {
-        case ifcdaqdrv_simtrig_stop: // stop periodic trigger            
-            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x0, 0x3)) // clear bits 1:0
-                status = status_device_access;
-            else
-                printf("Stopping simulated trigger\n");
-            
-            break;
-
-        case ifcdaqdrv_simtrig_startauto:
-            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x2, 0x1)) // set bit 2
-                status = status_device_access;            
-            else
-                printf("Starting periodic simulated trigger \n");
-            
-            break;
-
-        case ifcdaqdrv_simtrig_manual:
-            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, 0x1, 0x2)) // set bit 1
-                status = status_device_access;
-            else
-                printf("Sending manual simulated trigger\n");
-            
-            break;
-
-        case ifcdaqdrv_simtrig_setfreq:
-
-            /* prevent negative values*/
-            if (clk_divider <= 0) clk_divider = 4;
-            
-            /* calculate divisor */
-            ui32_regval = 125000000 / clk_divider;
-
-            if (ifc_xuser_tcsr_setclr(ifcdevice, 0x6F, (ui32_regval & 0xFFFFFFFC), ((~ui32_regval) & 0xFFFFFFFC)))
-                status = status_device_access;
-            else              
-                printf("Changing clock divider to 0x%08x \n", (clk_divider & 0xFFFFFFFC));
-            
-            break;
-        
-        case ifcdaqdrv_simtrig_readreg:
-            if (ifc_xuser_tcsr_read(ifcdevice, 0x6F, (int32_t*) &ui32_regval))
-                status = status_device_access;
-            else
-                printf("Register 0x6F = 0x%08x \n", ui32_regval);
-
-            break;
-        
-        default:
-            printf("Invalid set_trigger_command\n");
-            break;
-    }   
-
-    if (status) printf("Error while trying to access register 0x6F\n");     
-#endif
-
-    return status;
-}
 
 ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor,
                                             double *freq, double *sample_rate, uint8_t sample_rate_changed)

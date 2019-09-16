@@ -16,6 +16,7 @@
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3117.h"
 #include "ifcdaqdrv_scope.h"
+#include "ifcdaqdrv_scope_lite.h"
 #include "ifcdaqdrv_scope4ch.h"
 
 
@@ -40,14 +41,18 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->set_offset            = adc3117_set_offset;
     ifcdevice->get_nsamples          = scope4ch_get_nsamples;
     ifcdevice->set_nsamples          = scope4ch_set_nsamples;
-    ifcdevice->set_trigger_threshold = adc3117_set_trigger_threshold;
-    ifcdevice->get_trigger_threshold = adc3117_get_trigger_threshold;
+    ifcdevice->set_trigger_threshold = NULL;
+    ifcdevice->get_trigger_threshold = NULL;
     ifcdevice->set_clock_frequency   = adc3117_set_clock_frequency;
     ifcdevice->get_clock_frequency   = adc3117_get_clock_frequency;
     ifcdevice->set_clock_source      = adc3117_set_clock_source;
     ifcdevice->get_clock_source      = adc3117_get_clock_source;
     ifcdevice->set_clock_divisor     = adc3117_set_clock_divisor;
     ifcdevice->get_clock_divisor     = adc3117_get_clock_divisor;
+
+    ifcdevice->arm_device            = scope4ch_arm_acquisition;
+    ifcdevice->disarm_device         = scope4ch_disarm_acquisition;
+    ifcdevice->wait_acq_end          = scope4ch_wait_acq_end;
 
     ifcdevice->set_pattern           = adc3117_set_test_pattern;
     ifcdevice->get_pattern           = adc3117_get_test_pattern;
@@ -58,7 +63,7 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->normalize_ch          = scope4ch_normalize_ch;
     ifcdevice->normalize             = ifcdaqdrv_scope_read;
 
-    ifcdevice->mode_switch           = ifcdaqdrv_scope_switch_mode; 
+    ifcdevice->mode_switch           = NULL; 
 
     ifcdevice->set_adc_channel       = adc3117_set_adc_channel;
     ifcdevice->get_adc_channel       = adc3117_get_adc_channel;
@@ -72,6 +77,18 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->set_sample_rate       = adc3117_set_sample_rate;
     ifcdevice->get_sample_rate       = adc3117_get_sample_rate;
+    ifcdevice->calc_sample_rate      = NULL;
+
+    ifcdevice->trigger_type     = ifcdaqdrv_trigger_soft;
+    ifcdevice->set_trigger      = scope4ch_set_trigger;
+    ifcdevice->get_trigger      = scope4ch_get_trigger;
+
+    ifcdevice->set_average      = NULL;
+    ifcdevice->get_average      = NULL;
+    ifcdevice->set_decimation   = NULL;
+    ifcdevice->get_decimation   = NULL;
+    ifcdevice->set_ptq          = NULL;
+    ifcdevice->get_ptq          = NULL;
 
     ifcdevice->configuration_command = adc3117_configuration_command;
 
@@ -89,9 +106,11 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
     ifcdevice->smem_sg_dma = 0;
 
+#if 0
     /* Remote procdure call functions */
     ifcdevice->write_generic = scope4ch_write_generic;
     ifcdevice->read_generic = scope4ch_read_generic;
+#endif
 
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
@@ -100,6 +119,198 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     return status;
 }
 
+ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_usr *ifcuser) 
+{
+    ifcdaqdrv_status status;
+    struct ifcdaqdrv_dev *ifcdevice;
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    INFOLOG(("Arming acquisition ...\n"));
+
+    /* autorun (reg 0x62 bit 1) is enabled by default 
+    * we need to set bit 1 of register 0x69 (loc_SBUF_CTL(i).RUN <=  aps_TCSR_DATW( 1);)
+    */
+    ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_REG_69, 1<<1, 0x00);
+    ifcdevice->armed = 1;
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    return status;
+}
+
+
+/*
+ * Disarm device
+ */
+ifcdaqdrv_status scope4ch_disarm_acquisition(struct ifcdaqdrv_usr *ifcuser)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if (!ifcdevice->armed)
+        return status_success;
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    INFOLOG(("Disarming acquisition\n"));
+
+    /* Register 0x66 
+    *   bit 16 -> reset acquisition
+    *   bit 12 -> ack interruption
+    */
+    ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x11000, 0x00);
+
+    /* Register 0x69 bit 2 -> halt */
+    ifc_scope_lite_tcsr_write(ifcdevice, IFC_SCOPE_LITE_TCSR_SBUF_CONTROL_STATUS_REG, 0x4);
+
+    /* Register 0x62 */
+    ifc_scope_lite_tcsr_write(ifcdevice, IFC_SCOPE_LITE_TCSR_ACQ_CONTROL_STATUS_REG, 0x0);
+
+    ifcdevice->armed = 0;
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status_success;
+}
+
+/* Using interrupts to wait for acquisition */
+ifcdaqdrv_status scope4ch_wait_acq_end(struct ifcdaqdrv_usr *ifcuser)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    /* Subscribe to interrupt number ZERO */
+    status = ifcdaqdrv_subs_intr(ifcuser, 0);
+    if (status) {
+        ifcdaqdrv_disarm_device(ifcuser);
+        return status;        
+    }
+
+    /* If software trigger, generate it manually */
+    if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft)
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00); // register 0x66 bit 8
+
+    INFOLOG(("Waiting for interrupt...\n"));
+
+    /* Wait for interrupt */
+    status = ifcdaqdrv_wait_intr(ifcuser, 0);
+    if (status) {
+        /* Interrupt never happened - generate soft trigger and catch new interrupt */
+        ifcdaqdrv_subs_intr(ifcuser, 0);
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00); // register 0x66 bit 8
+        ifcdaqdrv_wait_intr(ifcuser, 0);
+    }
+
+    ifcdaqdrv_disarm_device(ifcuser);
+    return status_success;
+}
+
+
+ifcdaqdrv_status scope4ch_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type trigger, int32_t threshold,
+                                       uint32_t mask, uint32_t rising_edge)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    if (ifcdevice->armed) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_device_armed;
+    }
+
+    /* There are only two options: backplane or software trigger */
+    switch (trigger) {
+        case ifcdaqdrv_trigger_backplane:
+
+            INFOLOG(("Selecting backplane trigger with line %d", (mask&0x0f)));
+
+            ifcdevice->trigger_type = ifcdaqdrv_trigger_backplane;
+            
+            /* Enable MLVDS lines*/
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT, 0);
+
+            /* Select trigger line in register 0x66 (mask should contain the backplane line)*/
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, (mask & 0x0f), 0x0f);
+            break;
+        
+        /* Treat any other trigger as soft trigger */    
+        default:
+            ifcdevice->trigger_type = ifcdaqdrv_trigger_soft;
+
+            INFOLOG(("Selecting SOFTWARE trigger\n"));
+
+            /* disable MLVDS lines */
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 0, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT);
+
+            /* reset bits 7:0 of register 0x66 */
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, 0x0f);
+            break;
+    }
+  
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    return status_success;
+}
+
+
+/*
+ * Get trigger configuration
+ */
+ifcdaqdrv_status scope4ch_get_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type *trigger,
+                                       int32_t *threshold, uint32_t *mask, uint32_t *rising_edge)
+{
+    ifcdaqdrv_status      status;
+    int32_t               i32_trig_val = 0; // Trigger value
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    /* Lock device so that the trigger configuration can be read out atomically. */
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    *trigger = ifcdevice->trigger_type;
+    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, &i32_trig_val);
+        if (status) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status;        
+    }
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+
+    /* Return the backplane trigger line using mask variable */
+    if (ifcdevice->trigger_type == ifcdaqdrv_trigger_backplane)
+        *mask = (uint32_t) (i32_trig_val & 0x0f);
+    else
+        *mask = 0;
+
+    return status;
+}
+
+
+
+#if 0
 ifcdaqdrv_status scope4ch_write_generic(struct ifcdaqdrv_dev *ifcdevice, int function, void *data)
 {
     ifcdaqdrv_status status;
@@ -126,10 +337,6 @@ ifcdaqdrv_status scope4ch_write_generic(struct ifcdaqdrv_dev *ifcdevice, int fun
 
         case SCOPE4CH_WRITE_ACK_ACQUISITION:
             status = scope4ch_ack_acquisition(ifcdevice);
-            break;
-
-        case SCOPE4CH_WRITE_ARM_ACQUISITION:
-            status = scope4ch_arm_acquisition(ifcdevice);
             break;
 
         case SCOPE4CH_WRITE_SOFT_TRIGGER:
@@ -193,6 +400,7 @@ ifcdaqdrv_status scope4ch_read_generic(struct ifcdaqdrv_dev *ifcdevice, int func
     
     return status;
 }
+#endif
 
 ifcdaqdrv_status scope4ch_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max){
 
@@ -255,13 +463,6 @@ ifcdaqdrv_status scope4ch_ack_acquisition(struct ifcdaqdrv_dev *ifcdevice)
 }
 
 
-ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_dev *ifcdevice) 
-{
-    ifcdaqdrv_status status;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_REG_69, 1<<1, 0x00);
-    ifcdevice->armed = 1;
-    return status;
-}
 
 
 ifcdaqdrv_status scope4ch_generate_trigger(struct ifcdaqdrv_dev *ifcdevice) 
@@ -318,15 +519,15 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     int32_t offset;
     int16_t *origin;
     int32_t *res;
-    uint32_t last_address,  nsamples,  npretrig,  ptq;
+    uint32_t last_address,  nsamples;
 
     offset = 0;
     origin = NULL;
     res = data;
     last_address = 0;
     nsamples = 0;
-    npretrig = 0;
-    ptq = 0;
+
+    INFOLOG(("Entering scope4ch_read_ai_ch for channel %d", channel));
 
     /* TODO: fix NSAMPLES - currently will always return max samples */
     ifcdevice->get_nsamples(ifcdevice, &nsamples);
@@ -340,9 +541,9 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     */
 
     if (channel < 2) {
-        offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel * 0x40000);
+        offset = IFC_SCOPE4CH_FMC1_SRAM_SAMPLES_OFFSET + (channel * 0x40000);
     } else {
-        offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel * 0x40000);
+        offset = IFC_SCOPE4CH_FMC2_SRAM_SAMPLES_OFFSET + (channel * 0x40000);
     }
 
     status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
@@ -350,12 +551,8 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
         return status;
     }
     
-    status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
-    if (status) {
-        return status;
-    }
-
-    status = ifcdaqdrv_get_ptq(ifcdevice, &ptq);
+    /* TODO: port this function to this file */
+    status = ifcdaqdrv_scope_get_sram_la(ifcdevice, &last_address);
     if (status) {
         return status;
     }
@@ -364,10 +561,9 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
         ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
 
     origin   = ifcdevice->sram_dma_buf->u_base;
-    npretrig = (nsamples * ptq) / 8;
 
     /* Copy from end of pretrig buffer to end of samples */
-    status = ifcdevice->normalize_ch(ifcdevice, channel, res + npretrig, origin, npretrig, nsamples - npretrig);
+    status = ifcdevice->normalize_ch(ifcdevice, channel, res, origin, 0, nsamples);
     if (status) {
         return status;
     }

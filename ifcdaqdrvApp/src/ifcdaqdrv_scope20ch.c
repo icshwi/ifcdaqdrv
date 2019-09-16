@@ -31,7 +31,7 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, ADC3117_SIGN_REG, 0x31170000);
-    usleep(200000);	
+    usleep(200000); 
     
     ifcdevice->init_adc              = adc3117_init_adc;
     ifcdevice->get_signature         = adc3117_get_signature;
@@ -42,14 +42,18 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->set_offset            = adc3117_set_offset;
     ifcdevice->get_nsamples          = scope4ch_get_nsamples;
     ifcdevice->set_nsamples          = scope4ch_set_nsamples;
-    ifcdevice->set_trigger_threshold = adc3117_set_trigger_threshold;
-    ifcdevice->get_trigger_threshold = adc3117_get_trigger_threshold;
+    ifcdevice->set_trigger_threshold = NULL;
+    ifcdevice->get_trigger_threshold = NULL;
     ifcdevice->set_clock_frequency   = adc3117_set_clock_frequency;
     ifcdevice->get_clock_frequency   = adc3117_get_clock_frequency;
     ifcdevice->set_clock_source      = adc3117_set_clock_source;
     ifcdevice->get_clock_source      = adc3117_get_clock_source;
     ifcdevice->set_clock_divisor     = adc3117_set_clock_divisor;
     ifcdevice->get_clock_divisor     = adc3117_get_clock_divisor;
+
+    ifcdevice->arm_device            = scope4ch_arm_acquisition;
+    ifcdevice->disarm_device         = scope4ch_disarm_acquisition;
+    ifcdevice->wait_acq_end          = scope4ch_wait_acq_end;
 
     ifcdevice->set_pattern           = adc3117_set_test_pattern;
     ifcdevice->get_pattern           = adc3117_get_test_pattern;
@@ -60,7 +64,7 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->normalize_ch          = scope4ch_normalize_ch;
     ifcdevice->normalize             = ifcdaqdrv_scope_read;
 
-    ifcdevice->mode_switch           = ifcdaqdrv_scope_switch_mode; 
+    ifcdevice->mode_switch           = NULL; 
 
     ifcdevice->set_adc_channel       = adc3117_set_adc_channel;
     ifcdevice->get_adc_channel       = adc3117_get_adc_channel;
@@ -74,6 +78,18 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->set_sample_rate       = adc3117_set_sample_rate;
     ifcdevice->get_sample_rate       = adc3117_get_sample_rate;
+    ifcdevice->calc_sample_rate      = NULL;
+
+    ifcdevice->trigger_type     = ifcdaqdrv_trigger_soft;
+    ifcdevice->set_trigger      = scope4ch_set_trigger;
+    ifcdevice->get_trigger      = scope4ch_get_trigger;
+
+    ifcdevice->set_average      = NULL;
+    ifcdevice->get_average      = NULL;
+    ifcdevice->set_decimation   = NULL;
+    ifcdevice->get_decimation   = NULL;
+    ifcdevice->set_ptq          = NULL;
+    ifcdevice->get_ptq          = NULL;
 
     ifcdevice->configuration_command = adc3117_configuration_command;
 
@@ -91,9 +107,11 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
     ifcdevice->smem_sg_dma = 0;
 
+#if 0
     /* Remote procdure call functions */
     ifcdevice->write_generic = scope4ch_write_generic;
     ifcdevice->read_generic = scope4ch_read_generic;
+#endif
 
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
@@ -108,24 +126,22 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
     int32_t offset;
     int16_t *origin;
     int32_t *res;
-    uint32_t last_address,  nsamples,  npretrig,  ptq;
+    uint32_t last_address,  nsamples;
 
     offset = 0;
     origin = NULL;
     res = data;
     last_address = 0;
     nsamples = 0;
-    npretrig = 0;
-    ptq = 0;
 
     /* TODO: fix NSAMPLES - currently will always return max samples */
     ifcdevice->get_nsamples(ifcdevice, &nsamples);
 
     /* ADDRESS DEFINITIONS */
     if (ifcdevice->fmc == 1) {
-        offset = IFC_SCOPE_LITE_SRAM_FMC1_SAMPLES_OFFSET + (channel << 12);
+        offset = IFC_SCOPE4CH_FMC1_SRAM_SAMPLES_OFFSET + (channel << 12);
     } else {
-        offset = IFC_SCOPE_LITE_SRAM_FMC2_SAMPLES_OFFSET + (channel << 12);
+        offset = IFC_SCOPE4CH_FMC2_SRAM_SAMPLES_OFFSET + (channel << 12);
     }
 
     status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
@@ -133,12 +149,7 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
         return status;
     }
     
-    status = ifcdaqdrv_get_sram_la(ifcdevice, &last_address);
-    if (status) {
-        return status;
-    }
-
-    status = ifcdaqdrv_get_ptq(ifcdevice, &ptq);
+    status = ifcdaqdrv_scope_get_sram_la(ifcdevice, &last_address);
     if (status) {
         return status;
     }
@@ -147,10 +158,9 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
         ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
 
     origin   = ifcdevice->sram_dma_buf->u_base;
-    npretrig = (nsamples * ptq) / 8;
 
     /* Copy from end of pretrig buffer to end of samples */
-    status = ifcdevice->normalize_ch(ifcdevice, channel, res + npretrig, origin, npretrig, nsamples - npretrig);
+    status = ifcdevice->normalize_ch(ifcdevice, channel, res, origin, 0, nsamples);
     if (status) {
         return status;
     }

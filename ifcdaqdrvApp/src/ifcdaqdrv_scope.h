@@ -96,11 +96,6 @@
 #define IFC_SCOPE_MLVDS_CONTROL_REG					0x09
 #define IFC_SCOPE_MLVDS_ENABLE_SHIFT				31
 
-#define IFC_SCOPE_BACKPLANE_MASK_REG				0x66
-#define IFC_SCOPE_BACKPLANE_TRIGCNT_REG				0x67
-#define IFC_SCOPE_REG_69							0x69
-
-
 
 // The following option enables rearranging of pretrigger circular buffer.
 #ifndef PRETRIG_ORGANIZE

@@ -10,31 +10,6 @@
 extern "C" {
 #endif
 
-#define IFC1210SCOPEDRV_TOSCA_SIGNATURE       0x12350201 // IFC1410
-#define IFC1210SCOPEDRV_TOSCA_SIGNATURE_MASK  0xffff0000
-
-#define IFC1210SCOPEDRV_SCOPE_SIGNATURE       0x12110301 // IFC1410
-#define IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE   0x12100501
-#define IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE 0x12101201
-#define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
-#define IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE  0x73570001
-#define IFC1410SCOPEDRV_ENHSCOPE_SIGNATURE    0x12361717
-#define IFC1410SCOPEDRV_SCOPE_LITE_4CHANNELS  0x73571704
-#define IFC1410SCOPEDRV_SCOPE_LITE_20CHANNELS 0x73571720
-
-/**
- * @brief Constants to select backplane lines
- */
-#define IFCDAQDRV_BACKPLANE_RX17    0x01
-#define IFCDAQDRV_BACKPLANE_RX18    0x02
-#define IFCDAQDRV_BACKPLANE_RX19    0x04
-#define IFCDAQDRV_BACKPLANE_RX20    0x08
-#define IFCDAQDRV_BACKPLANE_TX17    0x10
-#define IFCDAQDRV_BACKPLANE_TX18    0x20
-#define IFCDAQDRV_BACKPLANE_TX19    0x40
-#define IFCDAQDRV_BACKPLANE_TX20    0x80
-#define IFCDAQDRV_BACKPLANE_ALL     0xFF
-
 /**
  * @brief Enumeration of possible error codes.
  */
@@ -595,18 +570,6 @@ ifcdaqdrv_status ifcdaqdrv_get_fw_revision(struct ifcdaqdrv_usr *ifcuser, uint8_
 ifcdaqdrv_status ifcdaqdrv_get_fw_version(struct ifcdaqdrv_usr *ifcuser, uint8_t *version);
 
 
-/*
- * Test function for the backplane triggering 
- */
-typedef enum {
-    ifcdaqdrv_simtrig_stop,     
-    ifcdaqdrv_simtrig_startauto,   
-    ifcdaqdrv_simtrig_manual,   
-    ifcdaqdrv_simtrig_setfreq,   
-    ifcdaqdrv_simtrig_readreg
- } ifcdaqdrv_simtrigger_action;
-
-ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider);
 ifcdaqdrv_status ifcdaqdrv_set_sample_rate(struct ifcdaqdrv_usr *ifcuser, double sample_rate);
 ifcdaqdrv_status ifcdaqdrv_get_sample_rate(struct ifcdaqdrv_usr *ifcuser, double *sample_rate);
 ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
