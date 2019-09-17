@@ -19,7 +19,7 @@
 
 
 /**
- * @brief Constants to select backplane lines
+ * @brief Constants to select backplane lines - DEPRECATED
  */
 #define IFCDAQDRV_BACKPLANE_RX17    0x01
 #define IFCDAQDRV_BACKPLANE_RX18    0x02

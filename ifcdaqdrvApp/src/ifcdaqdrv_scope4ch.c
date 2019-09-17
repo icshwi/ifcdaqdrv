@@ -131,8 +131,6 @@ ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_usr *ifcuser)
 
     pthread_mutex_lock(&ifcdevice->lock);
 
-    INFOLOG(("Arming acquisition ...\n"));
-
     /* autorun (reg 0x62 bit 1) is enabled by default 
     * we need to set bit 1 of register 0x69 (loc_SBUF_CTL(i).RUN <=  aps_TCSR_DATW( 1);)
     */
@@ -161,8 +159,6 @@ ifcdaqdrv_status scope4ch_disarm_acquisition(struct ifcdaqdrv_usr *ifcuser)
         return status_success;
 
     pthread_mutex_lock(&ifcdevice->lock);
-
-    INFOLOG(("Disarming acquisition\n"));
 
     /* Register 0x66 
     *   bit 16 -> reset acquisition
@@ -204,8 +200,6 @@ ifcdaqdrv_status scope4ch_wait_acq_end(struct ifcdaqdrv_usr *ifcuser)
     if (ifcdevice->trigger_type == ifcdaqdrv_trigger_soft)
         ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00); // register 0x66 bit 8
 
-    INFOLOG(("Waiting for interrupt...\n"));
-
     /* Wait for interrupt */
     status = ifcdaqdrv_wait_intr(ifcuser, 0);
     if (status) {
@@ -219,7 +213,13 @@ ifcdaqdrv_status scope4ch_wait_acq_end(struct ifcdaqdrv_usr *ifcuser)
     return status_success;
 }
 
-
+/*
+*   Current implementation of the backplane triggers in firmware (register 0x66 against mrfioc2)
+*   bit 0 -> Tx18
+*   bit 1 -> Tx19
+*   bit 2 -> Rx17 
+*   bit 3,4,5,6,7 -> Tx17
+*/
 ifcdaqdrv_status scope4ch_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type trigger, int32_t threshold,
                                        uint32_t mask, uint32_t rising_edge)
 {
@@ -241,28 +241,26 @@ ifcdaqdrv_status scope4ch_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_t
     switch (trigger) {
         case ifcdaqdrv_trigger_backplane:
 
-            INFOLOG(("Selecting backplane trigger with line %d", (mask&0x0f)));
-
             ifcdevice->trigger_type = ifcdaqdrv_trigger_backplane;
             
             /* Enable MLVDS lines*/
             ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT, 0);
 
             /* Select trigger line in register 0x66 (mask should contain the backplane line)*/
-            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, (mask & 0x0f), 0x0f);
+            mask = 1 << (mask & 0x07);
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0, 0xff);
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, (0x01 << (mask & 0x07)), 0x00);
             break;
         
         /* Treat any other trigger as soft trigger */    
         default:
             ifcdevice->trigger_type = ifcdaqdrv_trigger_soft;
 
-            INFOLOG(("Selecting SOFTWARE trigger\n"));
-
             /* disable MLVDS lines */
             ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 0, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT);
 
             /* reset bits 7:0 of register 0x66 */
-            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, 0x0f);
+            ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, 0xff);
             break;
     }
   
@@ -527,8 +525,6 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     last_address = 0;
     nsamples = 0;
 
-    INFOLOG(("Entering scope4ch_read_ai_ch for channel %d", channel));
-
     /* TODO: fix NSAMPLES - currently will always return max samples */
     ifcdevice->get_nsamples(ifcdevice, &nsamples);
 
@@ -536,8 +532,8 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     * This customized version of the SCOPE_LITE firmware stores data in the following format:
     * FMC 1 channel 0 -> 0x00100000 to 0x0013ffff
     * FMC 1 channel 1 -> 0x00140000 to 0x0017ffff
-    * FMC 1 channel 2 -> 0x00200000 to 0x0023ffff
-    * FMC 1 channel 3 -> 0x00240000 to 0x0027ffff
+    * FMC 1 channel 2 -> 0x00280000 to 0x002bffff
+    * FMC 1 channel 3 -> 0x002c0000 to 0x002fffff
     */
 
     if (channel < 2) {
