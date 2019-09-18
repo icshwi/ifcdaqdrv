@@ -106,12 +106,6 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
     ifcdevice->smem_sg_dma = 0;
 
-#if 0
-    /* Remote procdure call functions */
-    ifcdevice->write_generic = scope4ch_write_generic;
-    ifcdevice->read_generic = scope4ch_read_generic;
-#endif
-
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
@@ -306,100 +300,6 @@ ifcdaqdrv_status scope4ch_get_trigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_t
     return status;
 }
 
-
-
-#if 0
-ifcdaqdrv_status scope4ch_write_generic(struct ifcdaqdrv_dev *ifcdevice, int function, void *data)
-{
-    ifcdaqdrv_status status;
-    uint32_t *valid_data;
-
-    switch (function) {
-        case SCOPE4CH_WRITE_ENABLE_BACKPLANE:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_enable_backplane(ifcdevice, *valid_data);
-            break;
-
-        case SCOPE4CH_WRITE_DISABLE_BACKPLANE:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_disable_backplane(ifcdevice, *valid_data);
-            break;
-
-        case SCOPE4CH_WRITE_ACK_ACQUISITION:
-            status = scope4ch_ack_acquisition(ifcdevice);
-            break;
-
-        case SCOPE4CH_WRITE_SOFT_TRIGGER:
-            status = scope4ch_generate_trigger(ifcdevice);
-            break;
-        
-        default:
-            status = status_no_support;
-            break;
-    }
-    
-    return status;
-}
-
-ifcdaqdrv_status scope4ch_read_generic(struct ifcdaqdrv_dev *ifcdevice, int function, void *data)
-{
-    ifcdaqdrv_status status;
-    uint32_t *valid_data;
-    
-    switch (function) {
-        case SCOPE4CH_READ_TRIGGER_COUNT:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_read_backplane_trgcnt(ifcdevice, valid_data);
-            break;
-
-        case SCOPE4CH_READ_ACQ_COUNT:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_read_acq_count(ifcdevice, valid_data);
-            break;
-
-        case SCOPE4CH_READ_SCOPE_STATUS:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_read_scopestatus(ifcdevice, valid_data);
-            break;
-
-        case SCOPE4CH_READ_ACQ_DONE:
-            if (!data) {
-                status = status_argument_invalid;
-                break;
-            }
-            valid_data = (uint32_t*) data;
-            status = scope4ch_read_acqdone(ifcdevice, valid_data);
-            break;
-
-        default:
-            status = status_no_support;
-            break;
-    }
-    
-    return status;
-}
-#endif
-
 ifcdaqdrv_status scope4ch_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max){
 
     // Returns the maximum possible amount of samples
@@ -415,84 +315,6 @@ ifcdaqdrv_status scope4ch_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t
     else
         return status_success;
 }
-
-ifcdaqdrv_status scope4ch_enable_backplane(struct ifcdaqdrv_dev *ifcdevice, uint32_t backplane_lines) 
-{
-    ifcdaqdrv_status status;
-    backplane_lines = backplane_lines & 0xff;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, backplane_lines, 0x00);
-    return status;
-}
-
-ifcdaqdrv_status scope4ch_disable_backplane(struct ifcdaqdrv_dev *ifcdevice, uint32_t backplane_lines) 
-{
-    ifcdaqdrv_status status;
-    backplane_lines = backplane_lines & 0xff;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x00, backplane_lines);
-    return status;
-}
-
-
-ifcdaqdrv_status scope4ch_read_backplane_trgcnt(struct ifcdaqdrv_dev *ifcdevice, uint32_t *trig_cnt) 
-{
-    ifcdaqdrv_status status;
-    int32_t i32_reg_val;
-    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
-    *trig_cnt = (uint32_t) (i32_reg_val >> 16) & 0x0f;
-    return status;
-}
-
-
-ifcdaqdrv_status scope4ch_read_acq_count(struct ifcdaqdrv_dev *ifcdevice, uint32_t *acq_cnt) 
-{
-    ifcdaqdrv_status status;
-    int32_t i32_reg_val;
-    status = ifc_xuser_tcsr_read(ifcdevice, IFC_SCOPE_BACKPLANE_TRIGCNT_REG, &i32_reg_val);
-    *acq_cnt = (uint32_t) (i32_reg_val >> 8) & 0x0f;
-    return status;
-}
-
-
-ifcdaqdrv_status scope4ch_ack_acquisition(struct ifcdaqdrv_dev *ifcdevice) 
-{
-    ifcdaqdrv_status status;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 0x110FF, 0x00);
-    return status;
-}
-
-
-
-
-ifcdaqdrv_status scope4ch_generate_trigger(struct ifcdaqdrv_dev *ifcdevice) 
-{
-    ifcdaqdrv_status status;
-    status = ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_BACKPLANE_MASK_REG, 1<<8, 0x00);
-    return status;
-}
-
-
-ifcdaqdrv_status scope4ch_read_scopestatus(struct ifcdaqdrv_dev *ifcdevice, uint32_t *scopest) 
-{
-    ifcdaqdrv_status status;
-    int32_t i32_reg_val;
-
-    status = ifc_xuser_tcsr_read(ifcdevice, 0x66, &i32_reg_val);
-    *scopest = (uint32_t) (i32_reg_val >> 12) & 0x0f;
-
-    return status;
-}
-
-ifcdaqdrv_status scope4ch_read_acqdone(struct ifcdaqdrv_dev *ifcdevice, uint32_t *acqdone) 
-{
-    ifcdaqdrv_status status;
-    int32_t i32_reg_val;
-
-    status = ifc_xuser_tcsr_read(ifcdevice, 0x69, &i32_reg_val);
-    *acqdone = (uint32_t) (i32_reg_val >> 7) & 0x01;
-
-    return status;
-}
-
 
 /* Simplified version of ifcdaqdrv_scope_read_ai function */
 ifcdaqdrv_status scope4ch_read_allchannels(struct ifcdaqdrv_dev *ifcdevice, void *data) {

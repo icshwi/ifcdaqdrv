@@ -176,8 +176,6 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser)
             goto err_read;
         }
 
-        INFOLOG(("SCOPE 4CHANNELS for LEBT EMU SUCCESSFULLY INITIATED\n"));
-    
         break;
 
     case IFC1410SCOPEDRV_SCOPE_LITE_20CHANNELS:
@@ -190,7 +188,7 @@ ifcdaqdrv_status ifcdaqdrv_open_device(struct ifcdaqdrv_usr *ifcuser)
         if(status) {
             goto err_read;
         }
-    
+
         break;
     
     case IFC1210FASTINT_APP_SIGNATURE:

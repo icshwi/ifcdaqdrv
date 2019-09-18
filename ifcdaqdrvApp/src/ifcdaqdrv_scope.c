@@ -387,6 +387,12 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcd
 
     ifcdevice->trigger_type = trigger;
 
+    /* Enable backplane lines (MLVDS) */
+    if (ifcdevice->trigger_type == ifcdaqdrv_trigger_backplane)
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT, 0);
+    else
+        ifc_xuser_tcsr_setclr(ifcdevice, IFC_SCOPE_MLVDS_CONTROL_REG, 0, 1<<IFC_SCOPE_MLVDS_ENABLE_SHIFT);
+
     status = ifc_scope_acq_tcsr_setclr(ifcdevice, IFC_SCOPE_ACQ_TCSR_CS_REG, i32_cs_val, IFC_SCOPE_TCSR_CS_ACQ_Single_MASK | IFC_SCOPE_TCSR_CS_ACQ_Auto_MASK);
     if (status) {
         pthread_mutex_unlock(&ifcdevice->lock);

@@ -12,6 +12,7 @@
 
 ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice);
 ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *data);
+ifcdaqdrv_status scope20ch_read_memory(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
 
 #endif // _IFC_SCOPE20CH_H_
 

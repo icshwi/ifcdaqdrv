@@ -107,12 +107,6 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->smem_size = nsamples_max * ifcdevice->sample_size * ifcdevice->nchannels;
     ifcdevice->smem_sg_dma = 0;
 
-#if 0
-    /* Remote procdure call functions */
-    ifcdevice->write_generic = scope4ch_write_generic;
-    ifcdevice->read_generic = scope4ch_read_generic;
-#endif
-
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
@@ -123,12 +117,12 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 /* Simplified version of ifcdaqdrv_scope_read_ai_ch function */
 ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *data) {
     ifcdaqdrv_status  status;
-    int32_t offset;
+    int32_t fpga_ram_addr;
     int16_t *origin;
     int32_t *res;
     uint32_t last_address,  nsamples;
 
-    offset = 0;
+    fpga_ram_addr = 0;
     origin = NULL;
     res = data;
     last_address = 0;
@@ -139,12 +133,12 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
 
     /* ADDRESS DEFINITIONS */
     if (ifcdevice->fmc == 1) {
-        offset = IFC_SCOPE4CH_FMC1_SRAM_SAMPLES_OFFSET + (channel << 12);
+        fpga_ram_addr = IFC_SCOPE4CH_FMC1_SRAM_SAMPLES_OFFSET + (channel << 12);
     } else {
-        offset = IFC_SCOPE4CH_FMC2_SRAM_SAMPLES_OFFSET + (channel << 12);
+        fpga_ram_addr = IFC_SCOPE4CH_FMC2_SRAM_SAMPLES_OFFSET + (channel << 12);
     }
 
-    status = ifcdaqdrv_read_sram_unlocked(ifcdevice, ifcdevice->sram_dma_buf, offset, nsamples * ifcdevice->sample_size);
+    status = scope20ch_read_memory(ifcdevice, ifcdevice->sram_dma_buf, fpga_ram_addr, nsamples * ifcdevice->sample_size);
     if (status) {
         return status;
     }
@@ -157,7 +151,7 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
     if (ifcdaqdrv_is_byte_order_ppc())
         ifcdaqdrv_manualswap((uint16_t*) ifcdevice->sram_dma_buf->u_base,nsamples);
 
-    origin   = ifcdevice->sram_dma_buf->u_base;
+    origin = ifcdevice->sram_dma_buf->u_base;
 
     /* Copy from end of pretrig buffer to end of samples */
     status = ifcdevice->normalize_ch(ifcdevice, channel, res, origin, 0, nsamples);
@@ -168,3 +162,40 @@ ifcdaqdrv_status scope20ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t 
     return status_success;
 }
 
+
+/*
+ * This function reads /size/ bytes from /fpga_ram_addr/ in SRAM (FPGA Block Ram) to /dma_buf/.
+ *
+ * @param ifcdevice Device structure..
+ * @param dma_buf TSC DMA buffer to read into.
+ * @param fpga_ram_addr Offset addr in bytes to read from.
+ * @param size Size in bytes to read.
+ */
+
+ifcdaqdrv_status scope20ch_read_memory(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t fpga_ram_addr, uint32_t size) {
+    int status;
+    struct tsc_ioctl_dma_req dma_req = {0};
+
+    if (!dma_buf || !dma_buf->b_base) {
+        return status_internal;
+    }
+
+    dma_req.src_addr  = (uint64_t) fpga_ram_addr;
+    dma_req.src_space = DMA_SPACE_USR;
+    dma_req.src_mode  = 0;
+    dma_req.des_addr  = dma_buf->b_base;
+    dma_req.des_space = ifcdaqdrv_is_byte_order_ppc() ? DMA_SPACE_PCIE : DMA_SPACE_PCIE1;
+    dma_req.des_mode  = 0;
+    dma_req.size       = size;
+    dma_req.end_mode   = 0;
+    dma_req.intr_mode  = DMA_INTR_ENA;
+    dma_req.wait_mode  = 0;
+
+    status = tsc_dma_transfer(ifcdevice->node, &dma_req);
+    if (status) {
+        LOG((LEVEL_ERROR, "tsc_dma_transfer() returned 0x%x, DMA status 0x%08x\n", status, dma_req.dma_status));
+        return status;
+    }
+
+    return  status_success;
+}
