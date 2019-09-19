@@ -17,6 +17,9 @@ extern "C" {
 #define IFCFASTINT_CHANGESTATE  0x00
 #define IFCFASTINT_KEEPSTATE    0x01
 
+#define IFCFASTINT_RAND_WRPOINTER 0x00
+#define IFCFASTINT_TRIG_WRPOINTER 0x01
+
 
 /*
  * @brief Pre-processing modes for analog input
@@ -248,7 +251,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser,
                                          size_t count,
                                          void *data,
                                          size_t *nelm,
-                                         double  *wrpointer);
+                                         int readtype);
 
 /**
  * @brief Reset the FSM.

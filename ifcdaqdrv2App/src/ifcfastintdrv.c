@@ -256,7 +256,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm, double *wrpointer) {
+ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm, int readtype) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t i32_reg_val;
@@ -302,31 +302,37 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     content_start = (uint32_t) i32_reg_val;
 
-#if 1 // This code is here to debug the integration with MRF EVRs
-    //Now the write pointer is triggered by timing
-    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status;
-    }
-
-    i32_reg_val &= 0x0FFFFFE0;
-
-    /* THIS IS TO BE EXPOSED BY EPICS !!! */
-    *wrpointer = (double) i32_reg_val;
-#endif
-
-    if ((i32_reg_val < buf_start) || (i32_reg_val > buf_end))
+    /* If timing system is being used, catch the write pointer content from a different register */
+    if (readtype == IFCFASTINT_TRIG_WRPOINTER)
     {
-        // randomly
-        // Store write pointer in `content_end`
-        INFOLOG((" Write pointer OUTSIDE THE RING BUFFER !!!!!\n\n"));
+        //Now the write pointer is triggered by timing
+        status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status;
+        }
+    
+        i32_reg_val &= 0x0FFFFFE0; // adjust granularity to megabyte (if not adjusted, firmware might crash)
+
+        /* Make sure that write pointer is inside the ring buffer area */
+        if ((i32_reg_val < buf_start) || (i32_reg_val > buf_end))
+        {
+            INFOLOG((" Write pointer OUTSIDE ring buffer area. Reading the current write pointer location\n"));
+            status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
+            if(status) {
+                pthread_mutex_unlock(&ifcdevice->lock);
+                return status;
+            }
+        }
+    } else {
+        /* readtype == IFCFASTINT_RAND_WRPOINTER - read the current write pointer address */
         status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
         if(status) {
             pthread_mutex_unlock(&ifcdevice->lock);
             return status;
         }
     }
+
     /*
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
@@ -907,7 +913,7 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
 		}
 
         // Force autorun
-        pp_options = u64_setclr(pp_options, 1, 1, 61);
+        pp_options = u64_setclr(pp_options, 0, 1, 61);
 
     }
     /*
