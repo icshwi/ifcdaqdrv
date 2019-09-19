@@ -11,16 +11,11 @@
 #include "tsculib.h"
 
 #include "debug.h"
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
-#include "ifcdaqdrv_scope.h"
 
-static const uint32_t decimations[] = {1, 2, 5, 10, 20, 50, 100, 200, 0};
-
-static const uint32_t averages[] = {1, 4, 8, 16, 32, 64, 128, 256, 0};
-//static const uint32_t averages[] = {4, 8, 16, 32, 64, 128, 256, 512, 0}; // TODO: use different vectors for SRAM SMEM
 static const double   valid_clocks[] = {2400e6, 2500e6, 0};
 
 static int adc3110_SerialBus_isReady(struct ifcdaqdrv_dev *ifcdevice);
@@ -60,7 +55,6 @@ ifcdaqdrv_status adc3111_register(struct ifcdaqdrv_dev *ifcdevice) {
 
 ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     int status = 0;
-    uint32_t nsamples_max;
 
     /* Activate FMC */
     status = ifc_fmc_tcsr_write(ifcdevice, 0, 0x31100000);
@@ -70,38 +64,18 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
     ifcdevice->set_led               = adc3110_set_led;
     ifcdevice->get_gain              = adc3110_get_gain;
     ifcdevice->set_gain              = adc3110_set_gain;
-    ifcdevice->set_nsamples          = ifcdaqdrv_scope_set_nsamples;
-    ifcdevice->get_nsamples          = ifcdaqdrv_scope_get_nsamples;
-    ifcdevice->set_trigger_threshold = adc3110_set_trigger_threshold;
-    ifcdevice->get_trigger_threshold = adc3110_get_trigger_threshold;
     ifcdevice->set_clock_frequency   = adc3110_set_clock_frequency;
     ifcdevice->get_clock_frequency   = adc3110_get_clock_frequency;
     ifcdevice->set_clock_source      = adc3110_set_clock_source;
     ifcdevice->get_clock_source      = adc3110_get_clock_source;
     ifcdevice->set_clock_divisor     = adc3110_set_clock_divisor;
     ifcdevice->get_clock_divisor     = adc3110_get_clock_divisor;
-
     ifcdevice->set_pattern           = adc3110_set_test_pattern;
     ifcdevice->get_pattern           = adc3110_get_test_pattern;
+    ifcdevice->calc_sample_rate      = adc3110_calc_sample_rate;
 
-    ifcdevice->read_ai_ch            = ifcdaqdrv_scope_read_ai_ch;
-    ifcdevice->read_ai               = ifcdaqdrv_scope_read_ai;
-
-    ifcdevice->normalize_ch          = ifcdaqdrv_scope_read_ch;
-    ifcdevice->normalize             = ifcdaqdrv_scope_read;
-
-    ifcdevice->mode_switch = ifcdaqdrv_scope_switch_mode; // Changed default mode to SMEM
-
-    ifcdevice->mode        = ifcdaqdrv_acq_mode_sram;
     ifcdevice->sample_size = 2;
     ifcdevice->nchannels   = 8;
-
-    /* Filling buffers with ONE */
-    memset((uint32_t*) ifcdevice->decimations, 1, sizeof(ifcdevice->decimations)/sizeof(uint32_t));
-    memset((uint32_t*) ifcdevice->averages, 1, sizeof(ifcdevice->averages)/sizeof(uint32_t));
-
-    memcpy(ifcdevice->decimations,  decimations,  sizeof(decimations));
-    memcpy(ifcdevice->averages,     averages,     sizeof(averages));
 
     ifcdevice->resolution  = 16;
     memcpy(ifcdevice->valid_clocks, valid_clocks, sizeof(valid_clocks));
@@ -113,13 +87,6 @@ ifcdaqdrv_status adc3110_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->armed       = 0;
     ifcdevice->poll_period = 10;
-
-    status = adc3110_get_sram_nsamples_max(ifcdevice, &nsamples_max);
-    if (status) {
-        return status;
-    }
-    ifcdevice->sram_size = nsamples_max * ifcdevice->sample_size;
-    ifcdevice->smem_size = 256 * 1024 * 1024;
 
     /* The subsystem lock is used to serialize access to the serial interface
      * since it requires several write/read pci accesses */
@@ -429,94 +396,9 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
     return status;
 }
 
-/* Two strings on the heap should be returned since the freeing is done elsewhere */
-
-ifcdaqdrv_status ifc_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struct fmc_fru_id *fru_id){
-    int  status;
-    char signature[ADC3110_SIGNATURELEN + 1];
-    char *p;
-
-    INFOLOG(("Trying to read EEPROM signature!!! \n"));
-    status = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000, 8, signature, sizeof(signature));
-    if (status) {
-        return status;
-    }
-
-    if (strcmp(signature, "ADC_3110") == 0 ||
-               strcmp(signature, "ADC3110") == 0 ||
-               strcmp(signature, "ADC3110 ") == 0 ||
-               strcmp(signature, " ADC3110") == 0) {
-        p = calloc(strlen("ADC3110") + 1, 1);
-        strcpy(p, "ADC3110");
-    } else if (strcmp(signature, "ADC_3111") == 0 ||
-               strcmp(signature, "ADC3111") == 0 ||
-               strcmp(signature, "ADC3111 ") == 0 ||
-               strcmp(signature, " ADC3111") == 0) {
-        p = calloc(strlen("ADC3111") + 1, 1);
-        strcpy(p, "ADC3111");
-    } else if (strcmp(signature, "ADC_3112") == 0 ||
-               strcmp(signature, "ADC3112") == 0 ||
-               strcmp(signature, "ADC3112 ") == 0 ||
-               strcmp(signature, " ADC3112") == 0) {
-        p = calloc(strlen("ADC3112") + 1, 1);
-        strcpy(p, "ADC3112");
-    } else {
-        return status_internal;
-    }
-    fru_id->product_name = p;
-
-    p = calloc(strlen("IOxOS") + 1, 1);
-    strcpy(p, "IOxOS");
-    fru_id->manufacturer = p;
-
-    return status_success;
-}
-
 /* seems unneccessary */
 ifcdaqdrv_status adc3110_ctrl_front_panel_gpio(struct ifcdaqdrv_dev *ifcdevice, int32_t value){
     return ifc_fmc_tcsr_write(ifcdevice, 5, value);
-}
-
-ifcdaqdrv_status ifc_fmc_eeprom_read_ChannelOffsetCompensation(struct ifcdaqdrv_dev *ifcdevice, unsigned channel,
-                                                               int32_t *offsetcompensation){
-    *offsetcompensation = 0;
-    int status;
-
-    if (channel >= ifcdevice->nchannels) {
-        return status_argument_invalid;
-    }
-
-#define OFFSETSTRLEN 4
-    char offstr[OFFSETSTRLEN + 1];
-
-    status = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000 + 44 + (channel * 4), OFFSETSTRLEN, offstr, sizeof(offstr));
-    if (status) {
-        return status;
-    }
-
-#if DEBUG
-    char testDate[8 + 1];
-    testDate[0] = '\n';
-    status      = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000 + 28, 8, testDate, sizeof(testDate));
-    if (status) {
-        return status;
-    }
-
-    char latestCalibrationDate[8 + 1];
-    latestCalibrationDate[0] = '\0';
-    status = ifc_fmc_eeprom_read_string(ifcdevice, 0x7000 + 36, 8, latestCalibrationDate,
-                                        sizeof(latestCalibrationDate));
-    if (status) {
-        return status;
-    }
-
-    INFOLOG(("%s(channel=%d) -> offset = %s -> %d  /testDate=%s calibrationDate=%s\n", __FUNCTION__, channel, offstr,
-           *offsetcompensation, testDate, latestCalibrationDate));
-#endif
-
-    *offsetcompensation = strtol(offstr, NULL, 16);
-
-    return 0;
 }
 
 ifcdaqdrv_status adc3110_tmp102_read(struct ifcdaqdrv_dev *ifcdevice, unsigned reg, uint32_t *ui32_reg_val){
@@ -1071,34 +953,6 @@ ifcdaqdrv_status adc3110_get_test_pattern(struct ifcdaqdrv_dev *ifcdevice, unsig
     return status_success;
 }
 
-ifcdaqdrv_status adc3110_set_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t threshold) {
-    uint16_t ui16_reg_val = (uint16_t)threshold + 32768;
-    // threshold += 32768; // Threshold should be ADC value (unsigned).
-
-    return ifc_scope_acq_tcsr_setclr(ifcdevice, 1, ui16_reg_val & 0xFFFF, 0xFFFF);
-}
-
-ifcdaqdrv_status adc3110_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t *threshold) {
-    ifcdaqdrv_status status;
-    int32_t          threshold_adc;
-    int32_t          i32_reg_val;
-
-    status = ifc_scope_acq_tcsr_read(ifcdevice, 1, &i32_reg_val);
-    if (status) {
-        return status;
-    }
-    threshold_adc = (i32_reg_val & 0xFFFF) - 32768;
-
-    /* Sign extension */
-    if (threshold_adc & 0x8000) {
-        threshold_adc |= 0xFFFF0000;
-    }
-
-    *threshold = threshold_adc;
-
-    return status;
-}
-
 ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                        uint16_t *board_id) {
     ifcdaqdrv_status status;
@@ -1118,19 +972,6 @@ ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t 
         *board_id = (i32_reg_val & 0xffff0000) >> 16;
     }
 
-    return status;
-}
-
-ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max){
-    int32_t i32_reg_val;
-    int     status;
-
-    status = ifc_scope_acq_tcsr_read(ifcdevice, 0, &i32_reg_val);
-    if (i32_reg_val & IFC_SCOPE_TCSR_CS_SRAM_Buffer_Size_MASK) {
-        *nsamples_max = 32 * 1024;
-    } else {
-        *nsamples_max = 16 * 1024;
-    }
     return status;
 }
 
@@ -1263,5 +1104,154 @@ ifcdaqdrv_status adc3110_init_adc_alternative(struct ifcdaqdrv_dev *ifcdevice)
     INFOLOG(("%s(): Warning: Failed to lock clock..\n", __FUNCTION__));
     
     return status_success;
+}
+
+#define MAX_SAMPLE_RATES 100
+
+struct sample_rate {
+    double   frequency;
+    int32_t divisor;
+    int32_t decimation;
+    int32_t average;
+    double   sample_rate;
+};
+
+// First priority is sample_rate, second divisor
+static int compare_sample_rates(const void *a, const void *b) {
+    const struct sample_rate *da = (const struct sample_rate *) a;
+    const struct sample_rate *db = (const struct sample_rate *) b;
+    int32_t sample_diff = (da->sample_rate > db->sample_rate) - (da->sample_rate < db->sample_rate);
+    if(!sample_diff) {
+        return da->divisor - db->divisor;
+    }
+    return sample_diff;
+}
+
+ifcdaqdrv_status adc3110_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+
+    if (!sample_rate_changed) {
+        *sample_rate = *freq / *divisor / *averaging / *decimation;
+        return status_success;
+    } else {
+        struct sample_rate sample_rates[MAX_SAMPLE_RATES] = {};
+        double   frequencies[5];
+        size_t nfrequencies;
+        uint32_t decimations[8];
+        size_t ndecimations;
+        uint32_t averages[8];
+        size_t naverages;
+        uint32_t *downsamples;
+        size_t ndownsamples;
+        uint32_t  divisor_tmp, div_min, div_max;
+        uint32_t i, j, nsample_rates;
+        int32_t k;
+        double sample_rate_tmp;
+
+        status = ifcdaqdrv_get_clock_divisor_range(ifcuser, &div_min, &div_max);
+        status += ifcdaqdrv_get_clock_frequencies_valid(ifcuser, frequencies, sizeof(frequencies)/sizeof(double), &nfrequencies);
+        status += ifcdaqdrv_get_decimations_valid(ifcuser, decimations, sizeof(decimations)/sizeof(uint32_t), &ndecimations);
+        status += ifcdaqdrv_get_averages_valid(ifcuser, averages, sizeof(averages)/sizeof(uint32_t), &naverages);
+        if (status) {
+            LOG((LEVEL_NOTICE, "Getting values failed\n"));
+            return status_device_access;
+        }
+
+        /*
+         * Try to find the combination of clock frequency, clock divisor, decimation and average which
+         * is closest (but higher) to the requested sample rate.
+         *
+         * The algorithm is as follows:
+         * 1. For every available clock frequency
+         *      For every available downsample (decimation and average)
+         *         Start with the highest divisor and test all divisors until there is a sample rate higher than requested.
+         *         If such a sample rate is found, add it to the list of sample rates.
+         * 2. Sort list of sample rates. Lowest sample rate first. If equal prioritize lowest clock divisor.
+         * 3. Pick the first combination in the list.
+         */
+
+        nsample_rates = 0;
+        for(i = 0; i < nfrequencies; ++i) {
+            for(j = 0; j < 2; ++j) {
+                if (j == 0) {
+                    downsamples = decimations;
+                    ndownsamples = ndecimations;
+                } else {
+                    downsamples = averages;
+                    ndownsamples = naverages;
+                }
+                for(k = ndownsamples - 1; k >= 0 ; --k) {
+                    sample_rates[nsample_rates].frequency = frequencies[i];
+                    sample_rates[nsample_rates].divisor = div_min;
+                    sample_rates[nsample_rates].sample_rate = frequencies[i] / downsamples[k] / div_min;
+                    sample_rates[nsample_rates].decimation = 1;
+                    sample_rates[nsample_rates].average = 1;
+                    for(divisor_tmp = div_max; divisor_tmp >= div_min; --divisor_tmp) {
+                        sample_rate_tmp = frequencies[i] / downsamples[k] / divisor_tmp;
+                        /*ndsDebugStream(m_node) << "Try Frequency: " << frequencies[i]
+                                               << ", Divisor: "     << divisor
+                                               << ", Downsample: "  << downsamples[i]
+                                               << " : "             << sample_rate_tmp << std::endl;*/
+                        if(sample_rate_tmp >= *sample_rate) {
+                            sample_rates[nsample_rates].frequency = frequencies[i];
+                            sample_rates[nsample_rates].divisor = divisor_tmp;
+                            sample_rates[nsample_rates].sample_rate = sample_rate_tmp;
+                            if(j == 0) {
+                                sample_rates[nsample_rates].decimation = downsamples[k];
+                            } else {
+                                sample_rates[nsample_rates].average = downsamples[k];
+                            }
+                            /*ndsDebugStream(m_node) << "OK Frequency: "  << sample_rates[nsample_rates].frequency
+                                                   << ", Divisor: "     << sample_rates[nsample_rates].divisor
+                                                   << ", Decimation: "  << sample_rates[nsample_rates].decimation
+                                                   << ", Average: "     << sample_rates[nsample_rates].average
+                                                   << ". Sample Rate: " << sample_rates[nsample_rates].sample_rate << std::endl;*/
+                            nsample_rates++;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort lowest sample rates firsts.
+        qsort(sample_rates, nsample_rates, sizeof(struct sample_rate), compare_sample_rates);
+
+        /*ndsInfoStream(m_node) << "Will set Frequency: " << sample_rates[0].frequency
+                          << ", Divider: "          << sample_rates[0].divisor
+                          << ", Decimation: "       << sample_rates[0].decimation
+                          << ", Average: "          << sample_rates[0].average
+                          << ". Sample Rate: "      << sample_rates[0].sample_rate << std::endl;*/
+
+        *freq = sample_rates[0].frequency;
+        *divisor = sample_rates[0].divisor;
+        *decimation = sample_rates[0].decimation;
+        *averaging = sample_rates[0].average;
+
+        status = ifcdaqdrv_set_clock_frequency(ifcuser, *freq);
+        status += ifcdaqdrv_set_clock_divisor(ifcuser, *divisor);
+        if(*decimation > 1) {
+            status += ifcdaqdrv_set_average(ifcuser, 1);
+            status += ifcdaqdrv_set_decimation(ifcuser, *decimation);
+        } else {
+            status += ifcdaqdrv_set_decimation(ifcuser, 1);
+            status += ifcdaqdrv_set_average(ifcuser, *averaging);
+        }
+        if (status) {
+            LOG((LEVEL_NOTICE, "Setting values failed\n"));
+            return status_device_access;
+        }
+    }
+
+    return status;
 }
 

@@ -1,9 +1,7 @@
-#ifndef _IFC_DIO3118_H_
-#define _IFC_DIO3118_H_ 1
+#ifndef _IFCDAQDRV_DIO3118_H_
+#define _IFCDAQDRV_DIO3118_H_ 1
 
-#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_fmc.h"
 
 #define DIO3118_SIGN_REG                0x0
 #define DIO3118_MCSR_REG                0x1
@@ -31,4 +29,4 @@ ifcdaqdrv_status dio3118_set_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
 ifcdaqdrv_status dio3118_get_digiout(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t *value);
 
 
-#endif // _IFC_DIO3118_H_
+#endif // _IFCDAQDRV_DIO3118_H_

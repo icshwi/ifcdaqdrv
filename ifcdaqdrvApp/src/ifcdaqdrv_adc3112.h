@@ -1,5 +1,5 @@
-#ifndef _IFC_ADC3112_H_
-#define _IFC_ADC3112_H_ 1
+#ifndef _IFCDAQDRV_ADC3112_H_
+#define _IFCDAQDRV_ADC3112_H_ 1
 
 #define ADC3112_CLOCK_MAX 1000.0
 
@@ -20,4 +20,4 @@ int adc3112_set_dataformat(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_dataformat
 int ifc_adc3112_SerialBus_write(struct ifcdaqdrv_dev *ifcdevice, ADC3112_SBCDEVICE device, int addr, uint32_t data);
 uint32_t ifc_adc3112_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3112_SBCDEVICE device, int addr);
 
-#endif // _IFC_ADC3112_H_
+#endif // _IFCDAQDRV_ADC3112_H_

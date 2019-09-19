@@ -10,8 +10,7 @@
 #include "tscioctl.h"
 #include "tsculib.h"
 
-
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3112.h"

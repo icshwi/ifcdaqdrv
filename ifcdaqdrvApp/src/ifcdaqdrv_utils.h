@@ -1,16 +1,22 @@
-#ifndef _IFC1210SCOPEDRV_UTILS_H_
-#define _IFC1210SCOPEDRV_UTILS_H_ 1
+#ifndef _IFCDAQDRV_UTILS_H_
+#define _IFCDAQDRV_UTILS_H_ 1
 
 #include <pthread.h>
 #include <linux/types.h>
 
 #include "ifcdaqdrv_list.h"
 
-#define MAX_PEV_CARDS 16
+#define MAX_CARDS 16
 #define MAX_DECIMATIONS 20
 
 #define TCSR_ACCESS_ADJUST 0x00000000
 #define OFFSET_XUSER_CSR 0x1000
+
+#define I2C_CTL_EXEC_IDLE 0x00000000
+#define I2C_CTL_EXEC_RUN  0x00100000
+#define I2C_CTL_EXEC_DONE 0x00200000
+#define I2C_CTL_EXEC_ERR  0x00300000
+#define I2C_CTL_EXEC_MASK 0x00300000
 
 #define min(a, b) \
     ({ __typeof__ (a)_a = (a); \
@@ -21,6 +27,9 @@
     ({ __typeof__ (a)_a = (a); \
        __typeof__ (b)_b = (b); \
        _a > _b ? _a : _b; })
+
+#define IFCDAQDRV_TOSCA_SIGNATURE_MASK  0xffff0000
+#define IFCDAQDRV_APP_SIGNATURE_MASK    0xffff0000
 
 /**
  * Enumeration for Acquisition modes
@@ -50,7 +59,6 @@ typedef enum {
  * as many as 2 LEDs that can be individually controlled.
  *
  * The ADC3110 maps fmc0 to frontpanel led and fmc1 to rear side PCB led.
- * The DTACQ doesn't have any FMC led.
  * The ADC3117 maps fmc0 to frontpanel green led and fmc1 to frontpanel red led.
  */
 
@@ -68,7 +76,7 @@ typedef enum {
  * end of acquisition signaling, device bookkeeping and status information.
  */
 struct ifcdaqdrv_dev {
-    struct list_head   list;            /**< Entry in the list of opened devices, sis8300drv_devlist. */
+    struct list_head   list;            /**< Entry in the list of opened devices, ifcdaqdrv_devlist. */
     uint32_t           card;            /**< Card/Crate number selected by rotational on-board switch. */
     uint32_t           fmc;             /**< FMC slot, 1 or 2. */
 
@@ -83,6 +91,9 @@ struct ifcdaqdrv_dev {
     uint16_t           board_id;        /**< FMC board id*/
 
     int                (*init_adc)(struct ifcdaqdrv_dev *ifcdevice);
+    int                (*arm_device)(struct ifcdaqdrv_usr *ifcuser);
+    int                (*disarm_device)(struct ifcdaqdrv_usr *ifcuser);
+    int                (*wait_acq_end)(struct ifcdaqdrv_usr *ifcuser);
     int                (*get_signature)(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                         uint16_t *board_id);
     int                (*set_led)(struct ifcdaqdrv_dev *ifcdevice, ifcdaqdrv_led led, ifcdaqdrv_led_state color);
@@ -127,15 +138,29 @@ struct ifcdaqdrv_dev {
     int                (*get_offset)(struct ifcdaqdrv_dev *ifcdevice, uint16_t *offset);
     int                (*set_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double sample_rate);
     int                (*get_sample_rate)(struct ifcdaqdrv_dev *ifcdevice, double *sample_rate);
+    int                (*calc_sample_rate)(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
     int                (*configuration_command)(struct ifcdaqdrv_dev *ifcdevice); /* Transfer configuration bits to all devices */
+
+    int                (*set_trigger)(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type trigger, int32_t threshold, uint32_t mask, uint32_t rising_edge);
+    int                (*get_trigger)(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_trigger_type *trigger, int32_t *threshold, uint32_t *mask, uint32_t *rising_edge);
+    int                (*set_average)(struct ifcdaqdrv_dev *ifcdevice, uint32_t average);
+    int                (*get_average)(struct ifcdaqdrv_dev *ifcdevice, uint32_t *average);
+    int                (*set_decimation)(struct ifcdaqdrv_usr *ifcuser, uint32_t decimation);
+    int                (*get_decimation)(struct ifcdaqdrv_usr *ifcuser, uint32_t *decimation);
+    int                (*set_ptq)(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
+    int                (*get_ptq)(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
+
+    /* Remove these */
+    int                (*set_npretrig)(struct ifcdaqdrv_dev *ifcdevice, uint32_t npretrig);
+    int                (*get_npretrig)(struct ifcdaqdrv_dev *ifcdevice, uint32_t *npretrig);
 
     ifcdaqdrv_acq_store_mode mode;           /**< In which memory to store acquistition SRAM/SMEM */
     ifcdaqdrv_trigger_type   trigger_type;
 
     struct tsc_ioctl_kbuf_req    *sram_dma_buf;                /**< Buffer for SRAM DMA transfers */
     struct tsc_ioctl_kbuf_req    *smem_dma_buf;                /**< Buffer for SMEM DMA transfers */
-    void                    *all_ch_buf;                  		/**< Buffer to store raw SMEM data */
-    void 					*sram_blk_buf;					/* Buffer to store raw SRAM data */
+    void                         *all_ch_buf;                  /**< Buffer to store raw SMEM data */
+    void                         *sram_blk_buf;                /* Buffer to store raw SRAM data */
 
     uint32_t                 sample_size;                  /**< Sample size in bytes, TODO: Function pointer instead? */
     uint32_t                 nchannels;                    /**< Number of channels */
@@ -155,11 +180,14 @@ struct ifcdaqdrv_dev {
 
     uint32_t sram_size;                                    /**< Size of SRAM per channel in bytes  */
     uint32_t smem_size;                                    /**< Size of shared RAM in bytes (512/2 MB in IFC1210). */
+    uint32_t smem_sg_dma;                                  /**< Set to use scatter gather DMA transfer */
 
     pthread_mutex_t lock;                                  /**< Lock that serializes access to the device. */
     pthread_mutex_t sub_lock;                              /**< Lock that serializes access to part of the device. */
     int                 (*set_digiout)(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t value);
     int                 (*get_digiout)(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, uint32_t *value);
+    int                 (*write_generic)(struct ifcdaqdrv_dev *ifcdevice, int function, void *data);
+    int                 (*read_generic)(struct ifcdaqdrv_dev *ifcdevice, int function, void *data);
 };
 
 inline static void setbit(uint32_t *val, int bitnr, int on){
@@ -171,52 +199,18 @@ inline static void setbit(uint32_t *val, int bitnr, int on){
 }
 
 /* Functions for accessing any TCSR */
-
 ifcdaqdrv_status ifc_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t *i32_reg_val);
 ifcdaqdrv_status ifc_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t value);
 ifcdaqdrv_status ifc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int offset, int register_idx, int32_t setmask, int32_t
-                                 clrmask)
-;
+                                 clrmask);
 
 /* Functions for accessing any XUSER TCSR */
-
 ifcdaqdrv_status ifc_xuser_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *value);
 ifcdaqdrv_status ifc_xuser_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value);
 ifcdaqdrv_status ifc_xuser_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
                                        clrmask);
 
-/* Functions for accessing SCOPE MAIN TCSR (0x60 to 0x6F) */
-
-ifcdaqdrv_status ifc_scope_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val);
-ifcdaqdrv_status ifc_scope_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value);
-ifcdaqdrv_status ifc_scope_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
-                                       clrmask);
-
-/* Functions for accessing SCOPE ACQ TCSR  (0x70-0x73, 0x74-0x77, 0x78-0x7B, 0x7C-0x7F (SCOPE FMC1/FMC2 and SRAM/SMEM specific)) */
-
-static inline int32_t ifc_get_scope_tcsr_offset(struct ifcdaqdrv_dev *ifcdevice) {
-    if(ifcdevice->fmc == 1) {
-        if(ifcdevice->mode == ifcdaqdrv_acq_mode_sram) {
-            return 0x70;
-        } else {
-            return 0x78;
-        }
-    } else {
-        if(ifcdevice->mode == ifcdaqdrv_acq_mode_sram){
-            return 0x74;
-        } else {
-            return 0x7C;
-        }
-    }
-}
-
-ifcdaqdrv_status ifc_scope_acq_tcsr_read(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t *i32_reg_val);
-ifcdaqdrv_status ifc_scope_acq_tcsr_write(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t value);
-ifcdaqdrv_status ifc_scope_acq_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int register_idx, int32_t setmask, int32_t
-                                           clrmask);
-
 /* Functions for accessing 0x80-0xBF or 0xC0-0xFF based on FMC1/FMC2. */
-
 static inline int32_t ifc_get_fmc_tcsr_offset(struct ifcdaqdrv_dev *ifcdevice) {
     if(ifcdevice->fmc == 1) {
         return 0x80;
@@ -233,17 +227,8 @@ ifcdaqdrv_status ifc_fmc_tcsr_setclr(struct ifcdaqdrv_dev *ifcdevice, int regist
 void ifcdaqdrv_free(struct ifcdaqdrv_dev *ifcdevice);
 
 ifcdaqdrv_status ifcdaqdrv_dma_allocate(struct ifcdaqdrv_dev *ifcdevice);
-//ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
 ifcdaqdrv_status ifcdaqdrv_read_sram_unlocked(struct ifcdaqdrv_dev *ifcdevice, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-//ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-  ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
-// ifcdaqdrv_status ifcdaqdrv_dma_read_unlocked(struct ifcdaqdrv_dev *ifcdevice, dma_addr_t src_addr, uint8_t src_space, uint8_t src_mode, dma_addr_t des_addr, uint8_t des_space, uint8_t des_mode, uint32_t size);
-ifcdaqdrv_status ifcdaqdrv_get_sram_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
-ifcdaqdrv_status ifcdaqdrv_get_smem_la(struct ifcdaqdrv_dev *ifcdevice, uint32_t *last_address);
-// int ifcdaqdrv_get_sram_pretrig_size(struct ifcdaqdrv_dev *ifcdevice, int *size);
-ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t ptq);
-ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_dev *ifcdevice, uint32_t *ptq);
-
+ifcdaqdrv_status ifcdaqdrv_read_smem_unlocked(struct ifcdaqdrv_dev *ifcdevice, void *res, struct tsc_ioctl_kbuf_req *dma_buf, uint32_t offset, uint32_t size);
 
 void ifcdaqdrv_manualswap(uint16_t *buffer, int nsamples);
 void ifcdaqdrv_start_tmeas(void);
@@ -251,30 +236,5 @@ void ifcdaqdrv_end_tmeas(void);
 long ifcdaqdrv_elapsedtime(void);
 int ifcdaqdrv_is_byte_order_ppc(void);
 
+#endif // _IFCDAQDRV_UTILS_H_
 
-#endif // _IFC1210SCOPEDRV_UTILS_H_
-
-
-
-
-#if 0
-// Imported from old project
-
-typedef enum {
-    TMODE_STOP       = 0, // 1)stop pending trigger/acquisition
-    TMODE_NORMAL     = 1, // 1)wait for trigger 2)Acquisition 3)trigger holdoff 4)goto(1)
-    TMODE_AUTO       = 2, // 1)wait for trigger(max Xms) 2)Acquisition 3)trigger holdoff 4)goto(1)
-    TMODE_SINGLESHOT = 3, // 1)wait for trigger 2)Acquisition 3)set mode TMODE_STOP
-    TMODE_MANUAL     = 4  // 1)manual start Aquisition 2)Acquisition 3)set mode TMODE_STOP
-} TRIGGERMODE;
-
-typedef enum {
-    TSLOPE_POSITIVE = 0x00000000,
-    TSLOPE_NEGATIVE = 0x08000000
-} TRIGGERSLOPE;
-
-typedef enum {
-    TLEVELMODE_RAW  = 0,
-    TLEVELMODE_VOLT = 1
-} TRIGGERLEVELMODE;
-#endif
