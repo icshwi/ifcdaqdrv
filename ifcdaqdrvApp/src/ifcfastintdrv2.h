@@ -484,10 +484,6 @@ ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint3
 ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data);
 ifcdaqdrv_status ifcfastint_set_timingmask(struct ifcdaqdrv_usr *ifcuser, uint32_t mask);
 
-ifcdaqdrv_status ifcfastint_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
-ifcdaqdrv_status ifcfastint_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
-
-
 #ifdef __cplusplus
 }
 #endif
