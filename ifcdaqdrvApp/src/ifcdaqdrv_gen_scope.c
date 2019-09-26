@@ -371,6 +371,7 @@ ifcdaqdrv_status ifcdaqdrv_gen_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, 
             i32_trig_val |= 3 << 24; /* Negative edge */
         }
         break;
+    case ifcdaqdrv_trigger_adc: 
     case ifcdaqdrv_trigger_frontpanel:
         gpio         = mask & 0x40000000;
         channel_mask = mask & 0x3fffffff;
@@ -406,7 +407,6 @@ ifcdaqdrv_status ifcdaqdrv_gen_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, 
             }
         }
         break;
-    case ifcdaqdrv_trigger_auto: // Auto is not supported anymore (will be interpreted as soft trigger)
     case ifcdaqdrv_trigger_soft:
         status = ifcdaqdrv_gen_scope_get_ptq(ifcdevice, &ptq);
         if(status) {

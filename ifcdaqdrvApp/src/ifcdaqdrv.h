@@ -93,10 +93,10 @@ static inline const char *ifcdaqdrv_strerror(ifcdaqdrv_status status) {
 
 typedef enum {
     ifcdaqdrv_trigger_none,       /**< Disable triggers */
-    ifcdaqdrv_trigger_backplane,  /**< Interpret channel mask as a VME trigger */
-    ifcdaqdrv_trigger_frontpanel, /**< Interpret channel mask as DAQ channel or FMC GPIO */
-    ifcdaqdrv_trigger_auto,       /**< Deprecated */
-    ifcdaqdrv_trigger_soft        /**< Manually trigger from software immediately after arming device */
+    ifcdaqdrv_trigger_backplane,  /**< Interpret channel mask as a MTCA trigger */
+    ifcdaqdrv_trigger_frontpanel, /**< Interpret channel mask as FMC GPIO */
+    ifcdaqdrv_trigger_adc,        /**< Interpret channel mask as ADC channel */
+    ifcdaqdrv_trigger_soft,       /**< Manually trigger from software immediately after arming device */
 } ifcdaqdrv_trigger_type;
 
 /**

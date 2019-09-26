@@ -322,8 +322,24 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcd
             i32_trig_val |= 1 << 27;
         }
         break;
+
     case ifcdaqdrv_trigger_frontpanel:
-        gpio         = mask & 0x40000000;
+        gpio = mask & 0x40000000;
+
+        if (!gpio) {
+            return status_argument_range;
+        }
+
+        i32_cs_val   = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
+        i32_trig_val = 1 << 31; // Enable trigger
+
+        i32_trig_val |= 2 << 16;       // Set GPIO trigger
+        if (rising_edge & 0x40000000) { // Set edge of trigger detection
+            i32_trig_val |= 1 << 27;
+        }
+        break;
+
+    case ifcdaqdrv_trigger_adc: 
         channel_mask = mask & 0x3fffffff;
         while (channel_mask >>= 1) {
             ++channel;
@@ -335,30 +351,14 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcd
 
         i32_cs_val   = IFC_SCOPE_TCSR_CS_ACQ_Single_VAL_SINGLE;
         i32_trig_val = 1 << 31; // Enable trigger
-        if (!gpio) {
-            /* Trigger only on channel */
-            i32_trig_val |= channel << 28;
-            if (rising_edge & (1 << channel)) {
-                i32_trig_val |= 1 << 27;
-            }
-        } else if (gpio && (mask & 0xff)) {
-            /* Trigger on GPIO & channel */
-            i32_trig_val |= channel << 28;
-            if (rising_edge & (1 << channel)) {
-                i32_trig_val |= 1 << 27;
-            }
-            if (rising_edge & mask & 0x40000000) {
-                i32_trig_val |= 1 << 19; // 1 = Active high
-            }
-        } else {
-            /* Trigger only on GPIO */
-            i32_trig_val |= 2 << 16;       // Set GPIO trigger
-            if (rising_edge & 0x40000000) {
-                i32_trig_val |= 1 << 27;
-            }
+
+        /* Trigger only on channel */
+        i32_trig_val |= channel << 28;
+        if (rising_edge & (1 << channel)) {
+            i32_trig_val |= 1 << 27;
         }
         break;
-    case ifcdaqdrv_trigger_auto: // Auto is not supported anymore (will be interpreted as soft trigger)
+
     case ifcdaqdrv_trigger_soft:
         status = ifcdaqdrv_scope_get_ptq(ifcdevice, &ptq);
         if(status) {
@@ -409,7 +409,7 @@ ifcdaqdrv_status ifcdaqdrv_scope_set_trigger(struct ifcdaqdrv_usr *ifcuser, ifcd
         status = ifcdevice->set_trigger_threshold(ifcdevice, threshold);
     }
 
-#if DEBUG
+#if 0
     /* This is interesting because set_trigger_threshold may modify the content of trigger register */
     ifc_scope_acq_tcsr_read(ifcdevice, IFC_SCOPE_ACQ_TCSR_TRIG_REG, &i32_trig_val);
     LOG((LEVEL_INFO, "Is set trig val %08x\n", i32_trig_val));
