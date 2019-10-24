@@ -34,11 +34,6 @@
 
 ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice);
 
-#if 0
-ifcdaqdrv_status scope4ch_write_generic(struct ifcdaqdrv_dev *ifcdevice, int function, void *data);
-ifcdaqdrv_status scope4ch_read_generic(struct ifcdaqdrv_dev *ifcdevice, int function, void *data);
-#endif
-
 ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_usr *ifcuser);
 ifcdaqdrv_status scope4ch_disarm_acquisition(struct ifcdaqdrv_usr *ifcuser);
 ifcdaqdrv_status scope4ch_wait_acq_end(struct ifcdaqdrv_usr *ifcuser);
@@ -54,6 +49,8 @@ ifcdaqdrv_status scope4ch_read_allchannels(struct ifcdaqdrv_dev *ifcdevice, void
 ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *data);
 ifcdaqdrv_status scope4ch_normalize_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t channel, void *res, void *data, size_t offset, size_t nelm);
 
+ifcdaqdrv_status scope4ch_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, 
+	int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
 
 #endif // _IFC_SCOPE4CH_H_
 

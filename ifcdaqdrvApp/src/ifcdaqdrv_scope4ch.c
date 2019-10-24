@@ -77,7 +77,7 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->set_sample_rate       = adc3117_set_sample_rate;
     ifcdevice->get_sample_rate       = adc3117_get_sample_rate;
-    ifcdevice->calc_sample_rate      = NULL;
+    ifcdevice->calc_sample_rate      = scope4ch_calc_sample_rate;
 
     ifcdevice->trigger_type     = ifcdaqdrv_trigger_soft;
     ifcdevice->set_trigger      = scope4ch_set_trigger;
@@ -110,12 +110,11 @@ ifcdaqdrv_status scope4ch_register(struct ifcdaqdrv_dev *ifcdevice) {
      * since it requires several write/read pci accesses */
     pthread_mutex_init(&ifcdevice->sub_lock, NULL);
 
-    return status;
+    return status_success;
 }
 
 ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_usr *ifcuser) 
 {
-    ifcdaqdrv_status status;
     struct ifcdaqdrv_dev *ifcdevice;
     ifcdevice = ifcuser->device;
 
@@ -133,7 +132,7 @@ ifcdaqdrv_status scope4ch_arm_acquisition(struct ifcdaqdrv_usr *ifcuser)
 
     pthread_mutex_unlock(&ifcdevice->lock);
 
-    return status;
+    return status_success;
 }
 
 
@@ -310,7 +309,7 @@ ifcdaqdrv_status scope4ch_get_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t
 
 ifcdaqdrv_status scope4ch_set_nsamples(struct ifcdaqdrv_dev *ifcdevice, uint32_t nsamples)
 {
-    if (nsamples > (ifcdevice->sram_size / ifcdevice->nchannels / ifcdevice->sample_size))
+    if (nsamples > SCOPE4CH_MAX_SAMPLES)
         return status_argument_range;
     else
         return status_success;
@@ -368,7 +367,7 @@ ifcdaqdrv_status scope4ch_read_ai_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t c
     if (status) {
         return status;
     }
-    
+   
     /* TODO: port this function to this file */
     status = ifcdaqdrv_scope_get_sram_la(ifcdevice, &last_address);
     if (status) {
@@ -399,4 +398,23 @@ ifcdaqdrv_status scope4ch_normalize_ch(struct ifcdaqdrv_dev *ifcdevice, uint32_t
         *target = (int16_t)(*itr);
     }
     return status_success;
+}
+
+
+ifcdaqdrv_status scope4ch_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, 
+	int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed)
+{
+	struct ifcdaqdrv_dev *ifcdevice;
+	double srate;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    adc3117_get_sample_rate(ifcdevice, &srate); 
+
+    *sample_rate = srate;
+    return status_success;
+
 }

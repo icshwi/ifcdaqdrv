@@ -596,8 +596,6 @@ ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser)
 ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
 ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
 ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
-ifcdaqdrv_status ifcdaqdrv_write_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
-ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
 
 /* Function identifiers for SCOPE 4 CHANNELS */
 #define SCOPE4CH_FUNCTION_OFFSET            10 // random for now...
@@ -615,6 +613,13 @@ ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int funct
 //Remove some day
 ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig);
 ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t *npretrig);
+
+
+ifcdaqdrv_status ifcdaqdrv_set_adc_channel_positive_input(struct ifcdaqdrv_usr *ifcuser, uint8_t input);
+ifcdaqdrv_status ifcdaqdrv_get_adc_channel_positive_input(struct ifcdaqdrv_usr *ifcuser, uint8_t *input);
+ifcdaqdrv_status ifcdaqdrv_set_adc_channel_negative_input(struct ifcdaqdrv_usr *ifcuser, uint8_t input);
+ifcdaqdrv_status ifcdaqdrv_get_adc_channel_negative_input(struct ifcdaqdrv_usr *ifcuser, uint8_t *input);
+
 
 #ifdef __cplusplus
 }

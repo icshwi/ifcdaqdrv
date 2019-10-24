@@ -78,7 +78,7 @@ ifcdaqdrv_status scope20ch_register(struct ifcdaqdrv_dev *ifcdevice) {
 
     ifcdevice->set_sample_rate       = adc3117_set_sample_rate;
     ifcdevice->get_sample_rate       = adc3117_get_sample_rate;
-    ifcdevice->calc_sample_rate      = NULL;
+    ifcdevice->calc_sample_rate      = scope4ch_calc_sample_rate;
 
     ifcdevice->trigger_type     = ifcdaqdrv_trigger_soft;
     ifcdevice->set_trigger      = scope4ch_set_trigger;

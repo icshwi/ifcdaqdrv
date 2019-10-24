@@ -978,7 +978,7 @@ ifcdaqdrv_status ifcdaqdrv_get_vref_max(struct ifcdaqdrv_usr *ifcuser, double *v
     }
 
     *vref_max = ifcdevice->vref_max;
-    return status_no_support;
+    return status_success;
 }
 
 /*
@@ -1489,4 +1489,101 @@ ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
     pthread_mutex_unlock(&ifcdevice->lock);
 
     return status;
+}
+
+
+
+
+ifcdaqdrv_status ifcdaqdrv_set_adc_channel_positive_input(struct ifcdaqdrv_usr *ifcuser, uint8_t input)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    if (ifcdevice->armed) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_device_armed;
+    }
+
+    if (ifcdevice->set_adc_channel_positive_input) {
+        status = ifcdevice->set_adc_channel_positive_input(ifcdevice, input);
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status;
+    }
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status_no_support;
+}
+
+ifcdaqdrv_status ifcdaqdrv_get_adc_channel_positive_input(struct ifcdaqdrv_usr *ifcuser, uint8_t *input)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+    if (!ifcdevice->get_adc_channel_positive_input) {
+        return status_no_support;
+    }
+    if (!input) {
+        return status_argument_invalid;
+    }
+
+    return ifcdevice->get_adc_channel_positive_input(ifcdevice, input);
+}
+
+
+
+/***********************************************************************************************/
+
+ifcdaqdrv_status ifcdaqdrv_set_adc_channel_negative_input(struct ifcdaqdrv_usr *ifcuser, uint8_t input)
+{
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    if (ifcdevice->armed) {
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status_device_armed;
+    }
+
+    if (ifcdevice->set_adc_channel_negative_input) {
+        status = ifcdevice->set_adc_channel_negative_input(ifcdevice, input);
+        pthread_mutex_unlock(&ifcdevice->lock);
+        return status;
+    }
+
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status_no_support;
+}
+
+ifcdaqdrv_status ifcdaqdrv_get_adc_channel_negative_input(struct ifcdaqdrv_usr *ifcuser, uint8_t *input)
+{
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+    if (!ifcdevice->get_adc_channel_negative_input) {
+        return status_no_support;
+    }
+    if (!input) {
+        return status_argument_invalid;
+    }
+
+    return ifcdevice->get_adc_channel_negative_input(ifcdevice, input);
 }
