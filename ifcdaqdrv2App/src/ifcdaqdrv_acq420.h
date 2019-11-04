@@ -1,9 +1,8 @@
 #ifndef _ACQ420_H_
 #define _ACQ420_H_ 1
 
-#include "ifcdaqdrv.h"
+#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_fmc.h"
 
 #define DTACQ_SIGN_REG 0
 #define DTACQ_MCSR_REG 1

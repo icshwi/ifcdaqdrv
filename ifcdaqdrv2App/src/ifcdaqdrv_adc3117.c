@@ -11,6 +11,9 @@
 #include "tsculib.h"
 
 #include "debug.h"
+#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv_utils.h"
+#include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3117.h"
 #include "ifcdaqdrv_scope.h"
 

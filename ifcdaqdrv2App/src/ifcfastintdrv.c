@@ -6,12 +6,12 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include "ifcdaqdrv.h"
+#include <ifcdaqdrv2.h>
 #include "ifcdaqdrv_dio3118.h"
 
 #include "debug.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcfastintdrv.h"
+#include "ifcfastintdrv2.h"
 #include "ifcfastintdrv_utils.h"
 #include "ifcdaqdrv_adc3110.h"
 

@@ -1,7 +1,7 @@
 #ifndef _IFC_ADC3117_H_
 #define _IFC_ADC3117_H_ 1
 
-#include "ifcdaqdrv.h"
+#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 

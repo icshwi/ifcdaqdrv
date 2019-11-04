@@ -1,11 +1,6 @@
 #ifndef _IFC_ADC3112_H_
 #define _IFC_ADC3112_H_ 1
 
-#include "ifcdaqdrv.h"
-#include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_fmc.h"
-
-
 #define ADC3112_CLOCK_MAX 1000.0
 
 typedef enum {LMK04803B = 100, // LMK04803B / start with enum value 100 to separate them from ADC3110_SBCDEVICE enums

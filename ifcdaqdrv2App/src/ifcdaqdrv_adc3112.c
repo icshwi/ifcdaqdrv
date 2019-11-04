@@ -11,6 +11,9 @@
 #include "tsculib.h"
 
 
+#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv_utils.h"
+#include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3112.h"
 
 static int ifc_adc3112_SerialBus_isReady(struct ifcdaqdrv_dev *ifcdevice);

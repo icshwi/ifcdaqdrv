@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <linux/types.h>
 
-#include "ifcdaqdrv.h"
-#include "ifcfastintdrv.h"
+#include "ifcdaqdrv2.h"
+#include "ifcfastintdrv2.h"
 
 
 #define IFCFASTINT_SRAM_PP_OFFSET 0x00100000
