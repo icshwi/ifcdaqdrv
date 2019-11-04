@@ -12,13 +12,13 @@
 #include "tsculib.h"
 
 #include "debug.h"
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_scope.h"
 #include "ifcdaqdrv_fmc.h"
 #include "ifcdaqdrv_adc3110.h"
 #include "ifcdaqdrv_adc3117.h"
-#include "ifcfastintdrv2.h"
+#include "ifcfastintdrv.h"
 #include "ifcfastintdrv_utils.h"
 
 #define IFC1410_FMC_EN_DATA   0xC0000000

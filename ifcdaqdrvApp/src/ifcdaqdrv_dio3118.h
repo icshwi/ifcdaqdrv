@@ -1,7 +1,7 @@
 #ifndef _IFC_DIO3118_H_
 #define _IFC_DIO3118_H_ 1
 
-#include "ifcdaqdrv2.h"
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_utils.h"
 #include "ifcdaqdrv_fmc.h"
 
