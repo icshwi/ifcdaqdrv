@@ -1,5 +1,5 @@
-#ifndef _IFC1210SCOPEDRV_H_
-#define _IFC1210SCOPEDRV_H_ 1
+#ifndef _IFCDAQDRV_H_
+#define _IFCDAQDRV_H_ 1
 
 /* Types from the following libraries are used */
 #include <stddef.h>
@@ -9,15 +9,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define IFC1210SCOPEDRV_TOSCA_SIGNATURE       0x12350201 // IFC1410
-#define IFC1210SCOPEDRV_TOSCA_SIGNATURE_MASK  0xffff0000
-
-#define IFC1210SCOPEDRV_SCOPE_SIGNATURE       0x12110301 // IFC1410
-#define IFC1210SCOPEDRV_FASTSCOPE_SIGNATURE   0x12100501
-#define IFC1210SCOPEDRV_SCOPE_DTACQ_SIGNATURE 0x12101201
-#define IFC1410SCOPEDRV_SCOPE_SIGNATURE       0x14100301
-#define IFC1410SCOPEDRV_SCOPE_LITE_SIGNATURE  0x73570001
 
 /**
  * @brief Enumeration of possible error codes.
@@ -456,7 +447,7 @@ ifcdaqdrv_status ifcdaqdrv_get_nsamples(struct ifcdaqdrv_usr *ifcuser, uint32_t 
  * @param[in] npretrig The number of pre-trigger samples.
  */
 
-ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_set_ptq(struct ifcdaqdrv_usr *ifcuser, uint32_t ptq);
 
 /**
  * @brief Get number of pre-trigger samples.
@@ -465,7 +456,7 @@ ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t 
  * @param[out] npretrig The number of pre-trigger samples.
  */
 
-ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t *npretrig);
+ifcdaqdrv_status ifcdaqdrv_get_ptq(struct ifcdaqdrv_usr *ifcuser, uint32_t *ptq);
 
 /**
  * @brief Set gain per channel. Supported gain varies between FMCs.
@@ -579,18 +570,6 @@ ifcdaqdrv_status ifcdaqdrv_get_fw_revision(struct ifcdaqdrv_usr *ifcuser, uint8_
 ifcdaqdrv_status ifcdaqdrv_get_fw_version(struct ifcdaqdrv_usr *ifcuser, uint8_t *version);
 
 
-/*
- * Test function for the backplane triggering 
- */
-typedef enum {
-    ifcdaqdrv_simtrig_stop,     
-    ifcdaqdrv_simtrig_startauto,   
-    ifcdaqdrv_simtrig_manual,   
-    ifcdaqdrv_simtrig_setfreq,   
-    ifcdaqdrv_simtrig_readreg
- } ifcdaqdrv_simtrigger_action;
-
-ifcdaqdrv_status ifcdaqdrv_set_simtrigger(struct ifcdaqdrv_usr *ifcuser, ifcdaqdrv_simtrigger_action function, int32_t clk_divider);
 ifcdaqdrv_status ifcdaqdrv_set_sample_rate(struct ifcdaqdrv_usr *ifcuser, double sample_rate);
 ifcdaqdrv_status ifcdaqdrv_get_sample_rate(struct ifcdaqdrv_usr *ifcuser, double *sample_rate);
 ifcdaqdrv_status ifcdaqdrv_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
@@ -600,6 +579,42 @@ ifcdaqdrv_status ifcdaqdrv_set_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t c
 ifcdaqdrv_status ifcdaqdrv_get_digiout(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, uint32_t *value);
 
 ifcdaqdrv_status ifcdaqdrv_is_bigendian(struct ifcdaqdrv_usr *ifcuser);
+
+ifcdaqdrv_status ifcdaqdrv_enhanced_scope_config(struct ifcdaqdrv_usr *ifcuser);
+
+ifcdaqdrv_status ifcdaqdrv_enable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines);
+ifcdaqdrv_status ifcdaqdrv_disable_backplane(struct ifcdaqdrv_usr *ifcuser, uint32_t backplane_lines);
+ifcdaqdrv_status ifcdaqdrv_read_backplane_trgcnt(struct ifcdaqdrv_usr *ifcuser, uint32_t *trig_cnt);
+ifcdaqdrv_status ifcdaqdrv_ack_acquisition(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_arm_scopelite(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_scopelite_trigger(struct ifcdaqdrv_usr *ifcuser);
+ifcdaqdrv_status ifcdaqdrv_read_acq_count(struct ifcdaqdrv_usr *ifcuser, uint32_t *acq_cnt);
+ifcdaqdrv_status ifcdaqdrv_read_scopestatus(struct ifcdaqdrv_usr *ifcuser, uint32_t *scopest);
+ifcdaqdrv_status ifcdaqdrv_read_acqdone(struct ifcdaqdrv_usr *ifcuser, uint32_t *acqdone);
+ifcdaqdrv_status ifcdaqdrv_wait_scopelite_acq_end(struct ifcdaqdrv_usr *ifcuser);
+
+ifcdaqdrv_status ifcdaqdrv_subs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_unsubs_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_wait_intr(struct ifcdaqdrv_usr *ifcuser, uint32_t irqn);
+ifcdaqdrv_status ifcdaqdrv_write_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
+ifcdaqdrv_status ifcdaqdrv_read_generic(struct ifcdaqdrv_usr *ifcuser, int function, void *data);
+
+/* Function identifiers for SCOPE 4 CHANNELS */
+#define SCOPE4CH_FUNCTION_OFFSET            10 // random for now...
+#define SCOPE4CH_WRITE_ENABLE_BACKPLANE     (SCOPE4CH_FUNCTION_OFFSET+0)
+#define SCOPE4CH_WRITE_DISABLE_BACKPLANE    (SCOPE4CH_FUNCTION_OFFSET+1)
+#define SCOPE4CH_WRITE_ACK_ACQUISITION      (SCOPE4CH_FUNCTION_OFFSET+2)
+#define SCOPE4CH_WRITE_ARM_ACQUISITION      (SCOPE4CH_FUNCTION_OFFSET+3)
+#define SCOPE4CH_WRITE_SOFT_TRIGGER         (SCOPE4CH_FUNCTION_OFFSET+4)
+
+#define SCOPE4CH_READ_TRIGGER_COUNT         (SCOPE4CH_FUNCTION_OFFSET+5)
+#define SCOPE4CH_READ_ACQ_COUNT             (SCOPE4CH_FUNCTION_OFFSET+6)
+#define SCOPE4CH_READ_SCOPE_STATUS          (SCOPE4CH_FUNCTION_OFFSET+7)
+#define SCOPE4CH_READ_ACQ_DONE              (SCOPE4CH_FUNCTION_OFFSET+8)
+
+//Remove some day
+ifcdaqdrv_status ifcdaqdrv_set_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t npretrig);
+ifcdaqdrv_status ifcdaqdrv_get_npretrig(struct ifcdaqdrv_usr *ifcuser, uint32_t *npretrig);
 
 #ifdef __cplusplus
 }

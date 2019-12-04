@@ -6,7 +6,7 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-#include <ifcdaqdrv2.h>
+#include "ifcdaqdrv.h"
 #include "ifcdaqdrv_dio3118.h"
 
 #include "debug.h"
@@ -32,10 +32,10 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
 
     /* Setup the size of the ring buffer */
     
-    intptr_t buf_start = 0x00000000;
-    intptr_t buf_end   = 0x0ff00000; //max allowed = 255 MB
+    intptr_t buf_start = 5; // buf_start in MBytes granularity
+    intptr_t buf_end   = 0x1F<<20;//0x0ff00000; //max allowed = 255 MB
 
-    i32_reg_val = buf_end + (buf_start >> 16);
+    i32_reg_val = buf_end + (buf_start << 4);
 
     /* if running on BIG endian machine, enable the firmware option to record the history buffer
 	 * as big endian. It will then swap the 64 bytes frame on a 4 byte basis, causing the 16-bit
@@ -85,6 +85,13 @@ ifcdaqdrv_status ifcfastint_init_fsm(struct ifcdaqdrv_usr *ifcuser) {
     if(status) {
         pthread_mutex_unlock(&ifcdevice->lock);
         return status_internal;
+    }
+
+    /* TESTING: enable bit 0 of the timing input mask (register 6C) */
+    status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0xfe);
+    if(status) {
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_internal;
     }
 
     /* Basic initialization is done - current STATE of the main state machine is preserved */
@@ -198,9 +205,9 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     /* buffer boundaries are FORCED to 0x0000 ---> 0x80000                     */
     /**************************************************************************/
 
-    buf_start = 0; // First history slot is special
-    buf_end = 0x80000;
-    buf_size = buf_end - buf_start;
+    //buf_start = 0; // First history slot is special
+    //buf_end = 0x80000;
+    //buf_size = buf_end - buf_start;
 
     intptr_t content_start;
     intptr_t content_end;
@@ -246,7 +253,7 @@ ifcdaqdrv_status ifcfastint_read_lastframe(struct ifcdaqdrv_usr *ifcuser, void *
     return status_success;
 }
 
-ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm) {
+ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t count, void *data, size_t *nelm, int readtype) {
     ifcdaqdrv_status      status;
     struct ifcdaqdrv_dev *ifcdevice;
     int32_t i32_reg_val;
@@ -278,6 +285,7 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
 
     buf_start = (((uint32_t)i32_reg_val & 0x0FF0) << 16); // MBytes granularity
     buf_end = ((uint32_t)i32_reg_val & 0x0FF00000); // This points to first item *after* the buffer
+    buf_end -= 0x80000;
     buf_size = buf_end - buf_start;
 
     uint32_t content_start;
@@ -291,12 +299,37 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     }
     content_start = (uint32_t) i32_reg_val;
 
-    // Store write pointer in `content_end`
-    status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
-    if(status) {
-        pthread_mutex_unlock(&ifcdevice->lock);
-        return status;
+    /* If timing system is being used, catch the write pointer content from a different register */
+    if (readtype == IFCFASTINT_TRIG_WRPOINTER)
+    {
+        //Now the write pointer is triggered by timing
+        status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_TIM, &i32_reg_val);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status;
+        }
+    
+        i32_reg_val &= 0x0FFFFFE0; // adjust granularity to megabyte (if not adjusted, firmware might crash)
+
+        /* Make sure that write pointer is inside the ring buffer area */
+        if ((i32_reg_val < buf_start) || (i32_reg_val > buf_end))
+        {
+            INFOLOG((" Write pointer OUTSIDE ring buffer area. Reading the current write pointer location\n"));
+            status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
+            if(status) {
+                pthread_mutex_unlock(&ifcdevice->lock);
+                return status;
+            }
+        }
+    } else {
+        /* readtype == IFCFASTINT_RAND_WRPOINTER - read the current write pointer address */
+        status = ifc_xuser_tcsr_read(ifcdevice, IFCFASTINT_BUF_W_PTR_REG, &i32_reg_val);
+        if(status) {
+            pthread_mutex_unlock(&ifcdevice->lock);
+            return status;
+        }
     }
+
     /*
      * Never read out the last item, it will make hardware think it overflowed.
      * W_PTR points to "next empty slot". Which means that we need to back it 2 steps.
@@ -306,6 +339,8 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     if(content_end < buf_start) {
             content_end += buf_size;
     }
+
+    
 
     if(content_end < buf_start || content_start < buf_start) {
         //LOG((LEVEL_ERROR, "bs: 0x%08" PRIxPTR " be: 0x%08" PRIxPTR " cs: 0x%08" PRIxPTR " ce: 0x%08" PRIxPTR "\n", buf_start, buf_end, content_start, content_end));
@@ -371,6 +406,33 @@ ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser, size_t c
     pthread_mutex_unlock(&ifcdevice->lock);
     return status_success;
 }
+
+ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data) {
+    ifcdaqdrv_status      status;
+    struct ifcdaqdrv_dev *ifcdevice;
+
+    ifcdevice = ifcuser->device;
+    if (!ifcdevice) {
+        return status_no_device;
+    }
+
+    if(!data) {
+        return status_argument_invalid;
+    }
+
+    pthread_mutex_lock(&ifcdevice->lock);
+
+    // Read 400 kB, from 0x101200 to 0x101600
+    status = ifcfastintdrv_read_sram_measurements(
+            ifcdevice,
+            data,
+            IFCFASTINT_SRAM_PP_MEASURE
+    );
+   
+    pthread_mutex_unlock(&ifcdevice->lock);
+    return status;
+}
+
 
 ifcdaqdrv_status ifcfastint_fsm_reset(struct ifcdaqdrv_usr *ifcuser) {
     ifcdaqdrv_status      status;
@@ -846,6 +908,9 @@ ifcdaqdrv_status ifcfastint_set_conf_analog_pp(struct ifcdaqdrv_usr *ifcuser,
 		if(write_mask & IFCFASTINT_ANALOG_CVAL_W) {
 			pp_options = u64_setclr(pp_options, (uint16_t)option->cval, 0xFFFF, 0);
 		}
+
+        // Force autorun
+        pp_options = u64_setclr(pp_options, 0, 1, 61);
 
     }
     /*
@@ -1846,3 +1911,98 @@ ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int 
 
     return status_success;
 }
+
+
+ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, ifcfastint_analog_pp ppblock, struct ifcfastint_analog_diag *diag_info) 
+{
+	ifcdaqdrv_status      status;
+	struct ifcdaqdrv_dev *ifcdevice;
+	uint64_t pp_status = 0;
+	uint32_t fpga_mem_address = 0;
+
+	ifcdevice = ifcuser->device;
+	if (!ifcdevice) {
+		return status_no_device;
+	}
+
+/* Current firmware supports only 20 analog inputs */
+	if(channel >= 20) {
+		return status_argument_range;
+	}
+
+	if(!diag_info) {
+		return status_argument_invalid;
+	}
+
+	pthread_mutex_lock(&ifcdevice->lock);
+
+	if ((ppblock != ifcfastint_analog_pp_channel)&&(ppblock != ifcfastint_analog_pp_pwravg))
+	{
+	/* Read the READ_OUT 64-bits register of the standard analog input pre-processing block. */
+		fpga_mem_address = 0x200 + ((uint32_t)ppblock*0x100) + channel*8; // READ_OUT registers starts at 0x200
+
+		usleep(500);
+		/* Read first time */
+		status = ifcfastintdrv_read_pp_status(ifcdevice, fpga_mem_address, &pp_status);
+		if(status) {
+			pthread_mutex_unlock(&ifcdevice->lock);
+			return status_internal;
+		}
+
+		diag_info->process_out = (bool) (pp_status >> 63) & 1;
+		diag_info->dev_val = 0;
+		diag_info->trig_dev_val = 0;
+		diag_info->pres_val = 0;
+		diag_info->trig_val = 0; 
+
+		switch(ppblock) {
+			case ifcfastint_analog_pp_lvlmon:
+				diag_info->pres_val = (pp_status >> 16) & 0xFFFF;
+				diag_info->trig_val = pp_status & 0xFFFF; 
+				break;
+
+			case ifcfastint_analog_pp_pulshp:
+			case ifcfastint_analog_pp_pulrate:
+				diag_info->pres_val = (pp_status >> 32) & 0xFFFFFF;
+				diag_info->trig_val = pp_status & 0xFFFFFF; 
+				break;
+
+			case ifcfastint_analog_pp_devmon:
+				diag_info->dev_val = (pp_status >> 16) & 0xFFFF;
+				diag_info->trig_dev_val = pp_status & 0xFFFF;
+				break;
+
+			default:
+				break;
+
+		}
+	}
+	
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_success;
+}
+
+ifcdaqdrv_status ifcfastint_set_timingmask(struct ifcdaqdrv_usr *ifcuser, uint32_t mask) 
+{
+	ifcdaqdrv_status      status;
+	struct ifcdaqdrv_dev *ifcdevice;
+
+	ifcdevice = ifcuser->device;
+	if (!ifcdevice) {
+		return status_no_device;
+	}
+
+	pthread_mutex_lock(&ifcdevice->lock);
+
+	mask = 0x00000001;
+	
+        status = ifc_xuser_tcsr_setclr(ifcdevice, IFCFASTINT_TIMING_CTL, 0x01, 0x00);
+	if(status) {
+		pthread_mutex_unlock(&ifcdevice->lock);
+		return status_internal;
+	}
+
+	pthread_mutex_unlock(&ifcdevice->lock);
+	return status_success;
+}
+

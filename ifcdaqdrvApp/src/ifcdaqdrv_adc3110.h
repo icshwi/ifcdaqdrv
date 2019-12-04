@@ -1,9 +1,7 @@
-#ifndef _IFC_ADC3110_H_
-#define _IFC_ADC3110_H_ 1
+#ifndef _IFCDAQDRV_ADC3110_H_
+#define _IFCDAQDRV_ADC3110_H_ 1
 
-#include "ifcdaqdrv2.h"
 #include "ifcdaqdrv_utils.h"
-#include "ifcdaqdrv_fmc.h"
 
 #define ADC3110_SIGN_REG                0x0
 #define ADC3110_MCSR_REG                0x1
@@ -63,10 +61,8 @@ ifcdaqdrv_status adc3110_SerialBus_read(struct ifcdaqdrv_dev *ifcdevice, ADC3110
 ifcdaqdrv_status adc3110_set_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t threshold);
 ifcdaqdrv_status adc3110_get_trigger_threshold(struct ifcdaqdrv_dev *ifcdevice, int32_t *threshold);
 
-ifcdaqdrv_status ifc_read_ioxos_signature(struct ifcdaqdrv_dev *ifcdevice, struct fmc_fru_id *fru_id);
-
 ifcdaqdrv_status adc3110_get_signature(struct ifcdaqdrv_dev *ifcdevice, uint8_t *revision, uint8_t *version,
                                        uint16_t *board_id);
-ifcdaqdrv_status adc3110_get_sram_nsamples_max(struct ifcdaqdrv_dev *ifcdevice, uint32_t *nsamples_max);
+ifcdaqdrv_status adc3110_calc_sample_rate(struct ifcdaqdrv_usr *ifcuser, int32_t *averaging, int32_t *decimation, int32_t *divisor, double *freq, double *sample_rate, uint8_t sample_rate_changed);
 
-#endif // _IFC_ADC3110_H_
+#endif // _IFCDAQDRV_ADC3110_H_

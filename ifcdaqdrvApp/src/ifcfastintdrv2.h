@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <ifcdaqdrv2.h>
+#include "ifcdaqdrv.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +16,9 @@ extern "C" {
 
 #define IFCFASTINT_CHANGESTATE  0x00
 #define IFCFASTINT_KEEPSTATE    0x01
+
+#define IFCFASTINT_RAND_WRPOINTER 0x00
+#define IFCFASTINT_TRIG_WRPOINTER 0x01
 
 
 /*
@@ -188,6 +191,15 @@ struct ifcfastint_digital_option {
     bool pre2run;
 };
 
+struct ifcfastint_analog_diag {
+	bool process_out;
+	uint32_t pres_val;
+	uint32_t trig_val;
+	int16_t dev_val;
+	int16_t trig_dev_val;
+};
+
+
 /**
  * @brief Initialize and start FSM
  */
@@ -238,7 +250,8 @@ ifcdaqdrv_status ifcfastint_get_pp_out(struct ifcdaqdrv_usr *ifcuser,
 ifcdaqdrv_status ifcfastint_read_history(struct ifcdaqdrv_usr *ifcuser,
                                          size_t count,
                                          void *data,
-                                         size_t *nelm);
+                                         size_t *nelm,
+                                         int readtype);
 
 /**
  * @brief Reset the FSM.
@@ -466,6 +479,10 @@ ifcdaqdrv_status ifcfastint_history_reset(struct ifcdaqdrv_usr *ifcuser);
 
 ifcdaqdrv_status ifcfastint_set_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double value);
 ifcdaqdrv_status ifcfastint_get_eeprom_param(struct ifcdaqdrv_usr *ifcuser, int channel, ifcfastint_aichannel_param aiparam, double *value);
+
+ifcdaqdrv_status ifcfastint_get_diagnostics(struct ifcdaqdrv_usr *ifcuser, uint32_t channel, ifcfastint_analog_pp ppblock, struct ifcfastint_analog_diag *diag_info);
+ifcdaqdrv_status ifcfastint_read_measurements(struct ifcdaqdrv_usr *ifcuser, void *data);
+ifcdaqdrv_status ifcfastint_set_timingmask(struct ifcdaqdrv_usr *ifcuser, uint32_t mask);
 
 #ifdef __cplusplus
 }
